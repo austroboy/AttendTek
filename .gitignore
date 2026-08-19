@@ -1,11 +1,14 @@
 venv/
 .env
+.venv/
 __pycache__/
 *.py[cod]
 *.sqlite3
+db.sqlite3
 .DS_Store
 media/
 staticfiles/
 *.log
 .idea/
 .vscode/
+.vercel
