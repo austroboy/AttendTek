@@ -102,7 +102,14 @@ USE_TZ = False
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
-STATIC_ROOT = Path("/tmp/staticfiles") if ON_VERCEL else BASE_DIR / "staticfiles"
+# On a normal server nginx serves these directly, so the paths are set from
+# the environment (see /root/attendtek/.env on the VPS).
+if os.environ.get("DJANGO_STATIC_ROOT"):
+    STATIC_ROOT = Path(os.environ["DJANGO_STATIC_ROOT"])
+elif ON_VERCEL:
+    STATIC_ROOT = Path("/tmp/staticfiles")
+else:
+    STATIC_ROOT = BASE_DIR / "staticfiles"
 STATIC_ROOT.mkdir(parents=True, exist_ok=True)
 # WhiteNoise reads straight from STATICFILES_DIRS, so a deploy never depends on
 # collectstatic having been run first.
@@ -113,7 +120,12 @@ MEDIA_URL = "media/"
 # Vercel's filesystem is read-only apart from /tmp, and /tmp is wiped between
 # requests. Uploaded photos and attachments will therefore not survive on
 # Vercel - move to S3 / Cloudinary / Vercel Blob when you need them to.
-MEDIA_ROOT = Path("/tmp/media") if ON_VERCEL else BASE_DIR / "media"
+if os.environ.get("DJANGO_MEDIA_ROOT"):
+    MEDIA_ROOT = Path(os.environ["DJANGO_MEDIA_ROOT"])
+elif ON_VERCEL:
+    MEDIA_ROOT = Path("/tmp/media")
+else:
+    MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
