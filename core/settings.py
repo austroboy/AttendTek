@@ -93,7 +93,7 @@ MESSAGE_STORAGE = "django.contrib.messages.storage.session.SessionStorage"
 
 # ---- Branding (shown on the sidebar and the sign-in page) ----
 SITE_NAME = "AttendTek"
-SITE_TAGLINE = ""          # e.g. "ZKTeco F18 · RFID" - leave blank to hide
+SITE_TAGLINE = "Smart Biometric & RFID"   # leave blank to hide
 
 # ---- Attendance business defaults (can be overridden per Shift) ----
 DEFAULT_OFFICE_START = "09:00"

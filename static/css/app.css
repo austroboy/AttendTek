@@ -3,14 +3,15 @@
    Palette, type scale and the day-tape signature element.
    ============================================================= */
 :root{
-  --ink:#14232B; --ink-2:#1C3440; --ink-3:#27454F;
-  --paper:#F1F4F3; --card:#FFFFFF; --line:#E0E7E5; --line-2:#CBD6D3;
-  --text:#17262C; --text-2:#5A6B70; --text-3:#8B9A9D;
-  --accent:#0E7C6B; --accent-soft:#E3F1EE;
+  --ink:#12314E; --ink-2:#1A4269; --ink-3:#235685;
+  --paper:#F1F4F7; --card:#FFFFFF; --line:#E1E7EE; --line-2:#CBD5E0;
+  --text:#16283A; --text-2:#57697C; --text-3:#8695A6;
+  --accent:#1B7FC4; --accent-soft:#E4F0FA;
+  --brand-orange:#F07A2B;
   --ok:#1B8F5C; --ok-soft:#E4F3EB;
   --late:#B87413; --late-soft:#FAEEDA;
   --bad:#B93F39; --bad-soft:#FAE7E5;
-  --info:#3667A6; --info-soft:#E6EDF7;
+  --info:#2C6FB0; --info-soft:#E6EDF7;
   --muted:#7E8E92; --muted-soft:#EDF1F0;
   --radius:10px; --radius-sm:6px;
   --shadow:0 1px 2px rgba(20,35,43,.06),0 8px 24px -16px rgba(20,35,43,.35);
@@ -43,21 +44,23 @@ a:hover{text-decoration:underline}
 }
 .brand{display:flex;gap:10px;align-items:center;padding:4px 8px 18px}
 .brand .mark{
-  width:34px;height:34px;border-radius:8px;background:var(--accent);color:#fff;
-  display:grid;place-items:center;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:15px;
+  width:38px;height:38px;border-radius:9px;background:#fff;
+  display:grid;place-items:center;padding:4px;flex:0 0 38px;
 }
+.brand .mark img{width:100%;height:100%;object-fit:contain;display:block}
+.brand b{letter-spacing:-.01em}
 .brand b{color:#fff;font-family:"Space Grotesk",sans-serif;font-size:15px;display:block;line-height:1.2}
-.brand span{font-size:11px;color:#7D949A}
-.rail .group{margin:16px 0 6px;padding:0 8px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5F797F;font-family:"IBM Plex Mono",monospace}
+.brand span{font-size:11px;color:#8AA4BE;display:block;line-height:1.25}
+.rail .group{margin:16px 0 6px;padding:0 8px;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#6C88A6;font-family:"IBM Plex Mono",monospace}
 .rail a.nav{
   display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);
-  color:#BACBCE;font-size:13.5px;text-decoration:none;margin-bottom:2px;
+  color:#B6C8DA;font-size:13.5px;text-decoration:none;margin-bottom:2px;
 }
 .rail a.nav:hover{background:var(--ink-2);color:#fff}
-.rail a.nav.active{background:var(--ink-3);color:#fff;box-shadow:inset 2px 0 0 var(--accent)}
-.rail .pill{margin-left:auto;background:var(--late);color:#fff;border-radius:20px;padding:0 6px;font-size:10.5px;font-family:"IBM Plex Mono",monospace}
+.rail a.nav.active{background:var(--ink-3);color:#fff;box-shadow:inset 3px 0 0 var(--brand-orange)}
+.rail .pill{margin-left:auto;background:var(--brand-orange);color:#fff;border-radius:20px;padding:0 6px;font-size:10.5px;font-family:"IBM Plex Mono",monospace}
 .rail .pill.count{background:var(--ink-3);color:#B7CBCE}
-.rail .who{margin-top:18px;border-top:1px solid #24404A;padding-top:14px;display:flex;gap:9px;align-items:center}
+.rail .who{margin-top:18px;border-top:1px solid #234A70;padding-top:14px;display:flex;gap:9px;align-items:center}
 .avatar{width:32px;height:32px;border-radius:50%;background:var(--ink-3);color:#DCE9EA;display:grid;place-items:center;font-size:12px;font-weight:600;flex:0 0 32px}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -173,12 +176,15 @@ select.field{appearance:none;background-image:linear-gradient(45deg,transparent 
 }
 .btn:hover{background:#F7F9F9;text-decoration:none}
 .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-.btn.primary:hover{background:#0B6659}
+.btn.primary:hover{background:#14669F}
 .btn.dark{background:var(--ink);border-color:var(--ink);color:#fff}
 .btn.danger{color:var(--bad);border-color:#EBC7C4}
 .btn.ok{color:var(--ok);border-color:#C4E4D3}
 .btn.sm{padding:5px 9px;font-size:12px}
 .btn.block{width:100%;justify-content:center}
+
+/* auth screen */
+.auth-logo{display:block;width:100%;max-width:240px;margin:0 auto 6px}
 
 /* messages */
 .msg{padding:11px 14px;border-radius:var(--radius-sm);margin-bottom:10px;font-size:13px;border-left:3px solid}

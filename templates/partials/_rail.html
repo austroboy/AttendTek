@@ -1,7 +1,7 @@
-{% load nav %}
+{% load nav static %}
 <nav class="rail" id="rail">
   <div class="brand">
-    <div class="mark">⌚</div>
+    <div class="mark"><img src="{% static 'img/attendtek-mark.png' %}" alt=""></div>
     <div><b>{{ site_name }}</b>{% if site_tagline %}<span>{{ site_tagline }}</span>{% endif %}</div>
   </div>
 
