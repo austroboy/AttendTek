@@ -1,0 +1,28 @@
+{% extends "base.html" %}{% block title %}Task board{% endblock %}
+{% block eyebrow %}People · {{ day|date:"d M Y" }}{% endblock %}{% block heading %}What everyone worked on{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm" href="?date={{ prev_day|date:'Y-m-d' }}">← {{ prev_day|date:"d M" }}</a>
+  <form method="get" class="row"><input class="field" type="date" name="date" value="{{ day|date:'Y-m-d' }}" style="width:auto">
+    <select class="field" name="employee" style="width:auto"><option value="">All employees</option>
+      {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select>
+    <button class="btn sm">Show</button></form>
+  <a class="btn sm" href="?date={{ next_day|date:'Y-m-d' }}">{{ next_day|date:"d M" }} →</a>
+</div>
+
+<div class="grid g-2">
+  {% for emp, items in by_employee %}
+  <div class="card"><div class="hd"><div class="emp"><div class="avatar">{{ emp.initials }}</div>
+    <div><b>{{ emp.display_name }}</b><span>{{ emp.employee_id }}</span></div></div></div>
+    <div class="bd">{% for t in items %}
+      <div class="kv"><span><b>{{ t.title }}</b>{% if t.project %}<span class="tiny muted"> · {{ t.project }}</span>{% endif %}</span>
+        <span><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span> <b>{{ t.hours_spent }}h</b></span></div>
+    {% endfor %}</div></div>
+  {% empty %}<div class="card"><div class="empty"><b>No tasks submitted on this day</b></div></div>{% endfor %}
+</div>
+
+{% if missing %}
+<div class="card" style="margin-top:14px"><div class="hd"><h3>Not submitted ({{ missing|length }})</h3></div>
+  <div class="bd"><div class="row">{% for e in missing %}<span class="badge muted">{{ e.display_name }}</span>{% endfor %}</div></div></div>
+{% endif %}
+{% endblock %}

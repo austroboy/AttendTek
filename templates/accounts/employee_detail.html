@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% block title %}{{ employee.display_name }}{% endblock %}
+{% block eyebrow %}{{ employee.employee_id }}{% endblock %}{% block heading %}{{ employee.display_name }}{% endblock %}
+{% block content %}
+<div class="grid g-side"><div class="stack">
+  <div class="card"><div class="hd"><h2>This month</h2>
+    <a class="right btn sm" href="{% url 'reports:employee' %}?employee={{ employee.pk }}">Full report</a></div>
+    <div class="bd"><div class="grid g-4" style="gap:10px">
+      <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
+      <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late</div></div>
+      <div class="stat bad"><div class="v">{{ summary.absent }}</div><div class="l">Absent</div></div>
+      <div class="stat info"><div class="v">{{ summary.worked_hours }}</div><div class="l">Hours worked</div></div>
+    </div></div></div>
+
+  <div class="card"><div class="hd"><h2>Last 14 days</h2></div><div class="bd flush"><table>
+    <thead><tr><th>Date</th><th>In</th><th>Required out</th><th>Out</th><th>Day</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for r in recent %}<tr>
+      <td class="mono small">{{ r.date|date:"d M, D" }}</td>
+      <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+      <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+      <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+      <td style="min-width:150px">{% include "partials/_tape.html" with record=r %}</td>
+      <td>{% include "partials/_badge.html" with record=r %}</td>
+      <td><a class="tiny" href="{% url 'attendance:record_edit' r.pk %}">edit</a></td></tr>
+    {% endfor %}</tbody></table></div></div>
+
+  <div class="card"><div class="hd"><h2>Recent tasks</h2></div><div class="bd">
+    {% for t in recent_tasks %}<div class="kv"><span>{{ t.date|date:"d M" }} · {{ t.title }}</span><b>{{ t.hours_spent }}h</b></div>
+    {% empty %}<div class="tiny muted">No tasks yet.</div>{% endfor %}</div></div>
+</div>
+
+<div class="stack">
+  <div class="card"><div class="hd"><h3>RFID card</h3></div><div class="bd">
+    <p class="tiny muted" style="margin-top:0">Enter the ID of the card issued to this employee. Punches from the device are matched using this ID.</p>
+    <form method="post">{% csrf_token %}{% include "partials/_form.html" with form=card_form %}
+      <button class="btn primary block">Save card ID</button></form>
+  </div></div>
+
+  <div class="card"><div class="hd"><h3>Profile</h3><a class="right tiny" href="{% url 'accounts:employee_edit' employee.pk %}">edit</a></div><div class="bd">
+    <div class="kv"><span>Employee ID</span><b>{{ employee.employee_id }}</b></div>
+    <div class="kv"><span>Department</span><b>{{ employee.department|default:"—" }}</b></div>
+    <div class="kv"><span>Designation</span><b>{{ employee.designation|default:"—" }}</b></div>
+    <div class="kv"><span>Shift</span><b>{{ employee.effective_shift.name|default:"—" }}</b></div>
+    <div class="kv"><span>Work policy</span><b>{{ employee.get_work_policy_display }}</b></div>
+    <div class="kv"><span>Phone</span><b>{{ employee.phone|default:"—" }}</b></div>
+    <div class="kv"><span>Joining</span><b>{{ employee.joining_date|date:"d M Y"|default:"—" }}</b></div>
+  </div></div>
+
+  <div class="card"><div class="hd"><h3>Leave</h3></div><div class="bd">
+    {% for l in leaves %}<div class="kv"><span>{{ l.leave_type.name }} {{ l.start_date|date:"d M" }}</span>
+      <span class="badge {{ l.badge_class }}">{{ l.get_status_display }}</span></div>
+    {% empty %}<div class="tiny muted">No leave records.</div>{% endfor %}</div></div>
+</div></div>
+{% endblock %}

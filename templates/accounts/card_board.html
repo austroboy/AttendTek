@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}RFID cards{% endblock %}
+{% block eyebrow %}People · RFID{% endblock %}{% block heading %}Assign RFID cards{% endblock %}
+{% block content %}
+<div class="msg info">Type the number printed on each card (or the card number read from the device), then press <b>Save all</b>.
+Once assigned, any punch from that card is recorded against this employee.</div>
+<form method="post"><div class="card"><div class="hd"><h2>{{ employees|length }} employees</h2>
+  <button class="btn primary right">Save all</button></div>
+  <div class="bd flush"><div class="table-wrap"><table>
+  <thead><tr><th>Employee</th><th>Department</th><th style="width:230px">RFID card ID</th><th>Issued</th></tr></thead>
+  <tbody>{% for e in employees %}<tr>
+    <td><div class="emp"><div class="avatar">{{ e.initials }}</div><div><b>{{ e.display_name }}</b><span>{{ e.employee_id }}</span></div></div></td>
+    <td class="small">{{ e.department|default:"—" }}</td>
+    <td><input class="field mono" name="card_{{ e.pk }}" value="{{ e.rfid_card_no|default:'' }}" placeholder="card ID"></td>
+    <td class="mono small">{{ e.card_issued_on|date:"d M Y"|default:"—" }}</td>
+  </tr>{% endfor %}</tbody></table></div></div></div>
+  {% csrf_token %}
+</form>
+{% endblock %}

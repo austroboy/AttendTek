@@ -1,0 +1,12 @@
+{% for field in form %}
+  <div class="fgroup {% if field.name in wide %}full{% endif %}">
+    {% if field.field.widget.input_type == 'checkbox' %}
+      <div class="inline-check">{{ field }}<label for="{{ field.id_for_label }}">{{ field.label }}</label></div>
+    {% else %}
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+    {% endif %}
+    {% if field.help_text %}<div class="help">{{ field.help_text }}</div>{% endif %}
+    {% for e in field.errors %}<div class="err">{{ e }}</div>{% endfor %}
+  </div>
+{% endfor %}
+{% if form.non_field_errors %}{% for e in form.non_field_errors %}<div class="msg error">{{ e }}</div>{% endfor %}{% endif %}

@@ -1,0 +1,11 @@
+{% with t=record.timeline %}
+{% if t %}
+<div class="tape {% if record.is_late %}is-late{% endif %} {% if record.is_early_out %}is-early{% endif %}" title="In {{ record.check_in|time:'h:i A' }} → {% if record.check_out %}Out {{ record.check_out|time:'h:i A' }}{% else %}running{% endif %} (need {{ record.required_out|time:'h:i A' }})">
+  <div class="sched" style="left:{{ t.scheduled_in_pct|floatformat:2 }}%"></div>
+  <div class="sched" style="left:{{ t.scheduled_out_pct|floatformat:2 }}%"></div>
+  <div class="worked" style="left:{{ t.in_pct|floatformat:2 }}%;width:{{ t.width|floatformat:2 }}%"></div>
+  <div class="mark" style="left:{{ t.in_pct|floatformat:2 }}%"></div>
+  {% if t.required_pct %}<div class="mark req" style="left:{{ t.required_pct|floatformat:2 }}%"></div>{% endif %}
+</div>
+{% else %}<span class="tiny muted">—</span>{% endif %}
+{% endwith %}

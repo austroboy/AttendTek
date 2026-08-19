@@ -1,0 +1,55 @@
+{% extends "base.html" %}{% block title %}Devices{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}Attendance devices{% endblock %}
+{% block content %}
+{% if not zk_available %}<div class="msg warning">
+  <b>pyzk</b> is not installed, so live sync from the device is unavailable.
+  Run <span class="mono">pip install pyzk</span> to enable it. Until then, use CSV import below.</div>{% endif %}
+
+<div class="grid g-side"><div class="stack">
+  {% for d in devices %}
+  <div class="card"><div class="hd"><h2>{{ d.name }}</h2>
+    <span class="badge {% if d.is_active %}ok{% else %}muted{% endif %} right">{% if d.is_active %}active{% else %}off{% endif %}</span></div>
+    <div class="bd">
+      <div class="kv"><span>IP : Port</span><b>{{ d.ip_address }}:{{ d.port }}</b></div>
+      <div class="kv"><span>Location</span><b>{{ d.location|default:"—" }}</b></div>
+      <div class="kv"><span>Last sync</span><b>{{ d.last_sync_at|date:"d M Y, h:i A"|default:"never" }}</b></div>
+      {% if d.last_sync_status %}<div class="tiny muted" style="margin-top:6px">{{ d.last_sync_status }}</div>{% endif %}
+      <div class="row" style="margin-top:12px">
+        <a class="btn primary sm" href="{% url 'devices:sync' d.pk %}">Sync punches</a>
+        <a class="btn sm" href="{% url 'devices:pull_cards' d.pk %}">Pull card IDs</a>
+        <a class="btn sm" href="{% url 'devices:set_time' d.pk %}">Device time set</a>
+        <a class="btn sm" href="{% url 'devices:edit' d.pk %}">Edit</a>
+      </div>
+    </div></div>
+  {% empty %}
+  <div class="card"><div class="empty"><b>No devices added yet</b>
+    Add the F18 with its IP address to start syncing punches.</div></div>
+  {% endfor %}
+  <a class="btn primary" href="{% url 'devices:create' %}">+ Add device</a>
+
+  <div class="card"><div class="hd"><h2>Sync history</h2></div><div class="bd flush"><table>
+    <thead><tr><th>Time</th><th>Device</th><th>Fetched</th><th>New</th><th>Unmatched</th><th>Result</th></tr></thead>
+    <tbody>{% for l in logs %}<tr>
+      <td class="mono small">{{ l.started_at|date:"d M, h:i A" }}</td>
+      <td class="small">{{ l.device.name }}</td>
+      <td class="mono">{{ l.fetched }}</td><td class="mono">{{ l.created }}</td><td class="mono">{{ l.unmatched }}</td>
+      <td><span class="badge {% if l.success %}ok{% else %}bad{% endif %}">{{ l.message|truncatechars:44 }}</span></td>
+    </tr>{% empty %}<tr><td colspan="6"><div class="empty">No syncs yet.</div></td></tr>{% endfor %}
+    </tbody></table></div></div>
+</div>
+
+<div class="stack">
+  <div class="card"><div class="hd"><h3>CSV import</h3></div><div class="bd">
+    <p class="tiny muted" style="margin-top:0">Upload a punch file exported from the device software.
+      Column: <span class="mono">card_no</span> ba <span class="mono">device_user_id</span>, ar <span class="mono">punch_time</span>.</p>
+    <form method="post" action="{% url 'devices:import' %}" enctype="multipart/form-data">{% csrf_token %}
+      {% include "partials/_form.html" with form=import_form %}
+      <button class="btn primary block">Import file</button></form>
+  </div></div>
+  <div class="card"><div class="hd"><h3>Auto sync</h3></div><div class="bd">
+    <p class="tiny muted" style="margin-top:0">Add these cron jobs on the server to keep punches flowing in:</p>
+    <pre class="mono tiny" style="background:var(--paper);padding:10px;border-radius:6px;overflow:auto">*/10 * * * * cd /path/to/project && python manage.py sync_devices
+5 21 * * * cd /path/to/project && python manage.py process_attendance</pre>
+  </div></div>
+</div></div>
+{% endblock %}

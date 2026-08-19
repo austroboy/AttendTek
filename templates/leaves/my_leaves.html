@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Leave{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}Leave request{% endblock %}
+{% block content %}
+<div class="grid g-side"><div class="stack">
+  <div class="card"><div class="hd"><h2>New leave request</h2></div><div class="bd">
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      <div class="form-grid">{% include "partials/_form.html" with wide="reason attachment" %}</div>
+      <button class="btn primary">Submit request</button></form>
+  </div></div>
+
+  <div class="card"><div class="hd"><h2>My requests gulo</h2></div><div class="bd flush"><table>
+    <thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Note</th><th></th></tr></thead>
+    <tbody>{% for l in requests %}<tr>
+      <td>{{ l.leave_type.name }}</td>
+      <td class="mono small">{{ l.start_date|date:"d M y" }}</td>
+      <td class="mono small">{{ l.end_date|date:"d M y" }}</td>
+      <td class="mono">{{ l.total_days }}</td>
+      <td><span class="badge {{ l.badge_class }}">{{ l.get_status_display }}</span></td>
+      <td class="tiny muted">{{ l.review_note|default:"" }}</td>
+      <td>{% if l.status == 'PENDING' %}<a class="tiny" href="{% url 'leaves:cancel' l.pk %}">cancel</a>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No leave requests yet</b></div></td></tr>{% endfor %}
+    </tbody></table></div></div>
+</div>
+<div class="card" style="align-self:start"><div class="hd"><h3>Leave balance</h3></div><div class="bd">
+  {% for lt, b in balance.items %}
+    <div class="kv"><span>{{ lt.name }}</span><b>{{ b.left }} / {{ b.quota }}</b></div>
+  {% empty %}<div class="tiny muted">An admin has not added any leave types yet.</div>{% endfor %}
+  <p class="tiny muted">Approved leave days show as "On leave" on your attendance instead of absent.</p>
+</div></div></div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}{% block title %}Home office review{% endblock %}
+{% block eyebrow %}Requests{% endblock %}{% block heading %}Home office log{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm {% if status == 'PENDING' %}dark{% endif %}" href="?status=PENDING">Pending</a>
+  <a class="btn sm {% if status == 'APPROVED' %}dark{% endif %}" href="?status=APPROVED">Approved</a>
+  <a class="btn sm {% if status == 'REJECTED' %}dark{% endif %}" href="?status=REJECTED">Rejected</a>
+  <a class="btn sm" href="?status=">All</a>
+</div>
+<div class="card"><div class="bd flush"><table>
+<thead><tr><th>Employee</th><th>Date</th><th>In</th><th>Out</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+<tbody>{% for h in entries %}<tr>
+  <td><div class="emp"><div class="avatar">{{ h.employee.initials }}</div><div>
+    <b>{{ h.employee.display_name }}</b><span>{{ h.employee.employee_id }}</span></div></div></td>
+  <td class="mono small">{{ h.date|date:"d M Y" }}</td>
+  <td class="mono">{{ h.check_in|time:"h:i A"|default:"—" }}</td>
+  <td class="mono">{{ h.check_out|time:"h:i A"|default:"—" }}</td>
+  <td class="small">{{ h.reason|truncatechars:60 }}{% if h.work_summary %}<div class="tiny muted">Kaj: {{ h.work_summary|truncatechars:60 }}</div>{% endif %}</td>
+  <td><span class="badge {{ h.badge_class }}">{{ h.get_status_display }}</span></td>
+  <td>{% if h.status != 'REJECTED' %}
+    <form method="post" action="{% url 'attendance:home_office_decide' h.pk 'reject' %}" style="display:inline">{% csrf_token %}
+      <button class="btn sm danger">Reject</button></form>
+  {% else %}
+    <form method="post" action="{% url 'attendance:home_office_decide' h.pk 'approve' %}" style="display:inline">{% csrf_token %}
+      <button class="btn sm ok">Restore</button></form>
+  {% endif %}
+  {% if h.reviewed_by %}<div class="tiny muted">{{ h.reviewed_by.display_name }}</div>{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No requests</b></div></td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

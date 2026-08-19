@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}Late report{% endblock %}
+{% block eyebrow %}Reports · {{ month_label }}{% endblock %}{% block heading %}Late &amp; early out{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>Year</label><input class="field" type="number" name="year" value="{{ year }}" style="width:110px"></div>
+  <div class="fgroup"><label>Month</label><input class="field" type="number" name="month" value="{{ month }}" min="1" max="12" style="width:90px"></div>
+  <button class="btn primary">Show</button></form></div></div>
+<div class="card"><div class="bd flush"><div class="table-wrap"><table>
+<thead><tr><th>Employee</th><th>Department</th><th>Late days</th><th>Early out days</th><th>Absent</th>
+  <th>Missing out</th><th>Total late (min)</th><th>Shortfall (min)</th><th>Avg worked</th></tr></thead>
+<tbody>{% for r in rows %}<tr>
+  <td><b>{{ r.employee__first_name }} {{ r.employee__last_name }}</b>
+    <div class="tiny muted mono">{{ r.employee__employee_id }}</div></td>
+  <td class="small">{{ r.employee__department__name|default:"—" }}</td>
+  <td class="mono"><span class="badge {% if r.late_days > 4 %}bad{% elif r.late_days %}warn{% else %}ok{% endif %}">{{ r.late_days }}</span></td>
+  <td class="mono">{{ r.early_days }}</td>
+  <td class="mono">{{ r.absent_days }}</td>
+  <td class="mono">{{ r.missing_out }}</td>
+  <td class="mono">{{ r.total_late_min|default:0 }}</td>
+  <td class="mono">{{ r.total_short_min|default:0 }}</td>
+  <td class="mono small">{{ r.avg_worked|floatformat:0 }}m</td>
+</tr>{% empty %}<tr><td colspan="9"><div class="empty"><b>No data</b></div></td></tr>{% endfor %}
+</tbody></table></div></div></div>
+{% endblock %}

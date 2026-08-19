@@ -1,0 +1,8 @@
+{% extends "base.html" %}{% block title %}Device{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}{% if device %}Edit device{% else %}New device{% endif %}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="bd">
+  <form method="post">{% csrf_token %}<div class="form-grid">{% include "partials/_form.html" %}</div>
+    <div class="row"><button class="btn primary">Save</button><a class="btn" href="{% url 'devices:list' %}">Cancel</a></div></form>
+</div></div>
+{% endblock %}

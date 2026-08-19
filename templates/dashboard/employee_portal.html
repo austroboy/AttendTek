@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block title %}My day{% endblock %}
+{% block eyebrow %}{{ today|date:"l, d M Y" }}{% endblock %}
+{% block heading %}Welcome back, {{ user.first_name|default:user.username }}{% endblock %}
+
+{% block content %}
+<div class="grid g-side">
+  <div class="stack">
+    <div class="card">
+      <div class="hd"><h2>Today at a glance</h2>
+        {% if record %}<span class="right">{% include "partials/_badge.html" %}</span>{% endif %}
+      </div>
+      <div class="bd">
+        <div class="grid g-4" style="gap:10px;margin-bottom:16px">
+          <div><div class="eyebrow">In</div><div class="mono" style="font-size:19px">{{ record.check_in|time:"h:i A"|default:"— : —" }}</div></div>
+          <div><div class="eyebrow">Required out</div><div class="mono" style="font-size:19px;color:var(--bad)">{{ record.required_out|time:"h:i A"|default:"— : —" }}</div></div>
+          <div><div class="eyebrow">Out</div><div class="mono" style="font-size:19px">{{ record.check_out|time:"h:i A"|default:"— : —" }}</div></div>
+          <div><div class="eyebrow">Worked</div><div class="mono" style="font-size:19px">{{ record.worked_display }}</div></div>
+        </div>
+        {% include "partials/_tape.html" %}
+        <div class="row tiny muted" style="margin-top:8px">
+          <span>Office {{ shift.start_time|time:"h:i A" }} – {{ shift.end_time|time:"h:i A" }}</span>
+          <span>· Late {{ shift.late_after|time:"h:i A" }} er por</span>
+          <span>· {{ shift.required_hours }} hours required</span>
+        </div>
+        {% if record.remarks %}<div class="msg {% if record.is_late %}warning{% else %}info{% endif %}" style="margin-top:12px">{{ record.remarks }}</div>{% endif %}
+        {% if record.is_early_out %}<div class="msg error" style="margin-top:8px">
+          Required out ({{ record.required_out|time:"h:i A" }})  — you left {{ record.early_out_minutes }} minutes early.</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>What did you work on today?</h2><span class="right tiny muted">Log this every day</span></div>
+      <div class="bd">
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="form" value="task">
+          <div class="form-grid">{% include "partials/_form.html" with form=task_form wide="details title" %}</div>
+          <button class="btn primary">Add task</button>
+        </form>
+        <div class="sep"></div>
+        {% for t in today_tasks %}
+          <div class="kv"><span><b>{{ t.title }}</b>{% if t.project %} <span class="tiny muted">· {{ t.project }}</span>{% endif %}</span>
+            <span><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span> <b>{{ t.hours_spent }}h</b></span></div>
+        {% empty %}<div class="tiny muted">No tasks logged today yet.</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="card"><div class="hd"><h2>This week</h2>
+      <a class="right tiny" href="{% url 'attendance:my_attendance' %}">View full month →</a></div>
+      <div class="bd flush"><table>
+        <thead><tr><th>Day</th><th>In</th><th>Required out</th><th>Out</th><th>Worked</th><th>Status</th></tr></thead>
+        <tbody>{% for r in week %}
+          <tr><td class="mono small">{{ r.date|date:"D d M" }}</td>
+            <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+            <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+            <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+            <td class="mono small">{{ r.worked_display }}</td>
+            <td>{% include "partials/_badge.html" with record=r %}</td></tr>
+        {% endfor %}</tbody></table></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>This month</h3></div><div class="bd">
+      <div class="kv"><span>Present</span><b>{{ summary.present }} days</b></div>
+      <div class="kv"><span>Late</span><b style="color:var(--late)">{{ summary.late }} days</b></div>
+      <div class="kv"><span>Early out</span><b style="color:var(--bad)">{{ summary.early_out }} days</b></div>
+      <div class="kv"><span>Home office</span><b>{{ summary.home_office }} days</b></div>
+      <div class="kv"><span>Absent</span><b>{{ summary.absent }} days</b></div>
+      <div class="kv"><span>Hours worked</span><b>{{ summary.worked_hours }} h</b></div>
+      <div class="kv"><span>Overtime</span><b style="color:var(--ok)">{{ summary.overtime_hours }} h</b></div>
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Not coming to the office?</h3></div><div class="bd">
+      <p class="small muted" style="margin-top:0">Working from home? Log your in and out time here — no approval needed.</p>
+      {% if open_home %}
+        <div class="msg warning">Home office in progress — in at {{ open_home.check_in|time:"h:i A" }}. Remember to log your out time.</div>
+      {% endif %}
+      <a class="btn primary block" href="{% url 'attendance:home_office' %}">Log home office</a>
+      <a class="btn block" style="margin-top:8px" href="{% url 'leaves:my_leaves' %}">Request leave</a>
+      <a class="btn block" style="margin-top:8px" href="{% url 'leaves:team' %}">Who's on leave</a>
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>My requests</h3></div><div class="bd">
+      {% for l in my_leaves %}<div class="kv"><span>{{ l.leave_type.name }} · {{ l.start_date|date:"d M" }}</span>
+        <span class="badge {{ l.badge_class }}">{{ l.get_status_display }}</span></div>{% endfor %}
+      {% for h in my_home_office %}<div class="kv"><span>Home office · {{ h.date|date:"d M" }}</span>
+        <span class="badge {{ h.badge_class }}">{{ h.get_status_display }}</span></div>{% endfor %}
+      {% if not my_leaves and not my_home_office %}<div class="tiny muted">No requests yet.</div>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

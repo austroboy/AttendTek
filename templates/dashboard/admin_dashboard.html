@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block eyebrow %}Live view · {{ day|date:"d M Y" }}{% endblock %}
+{% block heading %}Who's in today{% endblock %}
+
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <form method="get" class="row">
+    <input class="field" type="date" name="date" value="{{ day|date:'Y-m-d' }}" style="width:auto">
+    <button class="btn">Show</button>
+  </form>
+  <form method="post" action="{% url 'attendance:recalculate' %}" class="right">{% csrf_token %}
+    <input type="hidden" name="from" value="{{ day|date:'Y-m-d' }}">
+    <input type="hidden" name="to" value="{{ day|date:'Y-m-d' }}">
+    <button class="btn">Recalculate</button>
+  </form>
+  <a class="btn dark" href="{% url 'devices:list' %}">Device sync</a>
+</div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
+  <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late (after 10 AM)</div></div>
+  <div class="stat bad"><div class="v">{{ summary.absent }}</div><div class="l">Absent</div></div>
+  <div class="stat info"><div class="v">{{ summary.home_office }}</div><div class="l">Home office</div></div>
+</div>
+
+<div class="grid g-side">
+  <div class="stack">
+    <div class="card">
+      <div class="hd">
+        <h2>Today's punch tape</h2>
+        <div class="tape-legend right">
+          <span><i style="background:var(--ok)"></i>on time</span>
+          <span><i style="background:var(--late)"></i>late</span>
+          <span><i style="background:var(--bad)"></i>required out</span>
+        </div>
+      </div>
+      <div class="bd flush"><div class="table-wrap">
+      <table>
+        <thead><tr><th>Employee</th><th>In</th><th>Required out</th><th>Out</th>
+          <th style="width:210px">Day</th><th>Worked</th><th>Status</th></tr></thead>
+        <tbody>
+        {% for r in records %}
+          <tr>
+            <td><div class="emp"><div class="avatar">{{ r.employee.initials }}</div>
+              <div><b>{{ r.employee.display_name }}</b><span>{{ r.employee.employee_id }}{% if r.mode == 'HOME' %} · home{% endif %}</span></div></div></td>
+            <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+            <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+            <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+            <td>{% include "partials/_tape.html" with record=r %}</td>
+            <td class="mono small">{{ r.worked_display }}</td>
+            <td>{% include "partials/_badge.html" with record=r %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="empty"><b>No records for this day</b>
+            Sync a device, or press Recalculate to rebuild the day.</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div></div>
+    </div>
+
+    <div class="card"><div class="hd"><h2>Last 7 days</h2></div><div class="bd">
+      <div class="bars">
+        {% for t in trend %}
+        <div class="col">
+          {% widthratio t.absent max_trend 100 as ha %}{% widthratio t.late max_trend 100 as hl %}{% widthratio t.on_time max_trend 100 as ho %}
+          <div class="seg" style="background:var(--bad);height:{{ ha }}%"></div>
+          <div class="seg" style="background:var(--late);height:{{ hl }}%"></div>
+          <div class="seg" style="background:var(--ok);height:{{ ho }}%"></div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="row" style="gap:8px">
+        {% for t in trend %}<div class="lbl" style="flex:1;text-align:center">{{ t.date|date:"D" }}</div>{% endfor %}
+      </div>
+    </div></div>
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>Still in the office</h3><span class="badge info right">{{ still_in|length }}</span></div>
+      <div class="bd">
+        {% for r in still_in|slice:":8" %}
+          <div class="kv"><span>{{ r.employee.display_name }}</span><b>in {{ r.check_in|time:"h:i A" }}</b></div>
+        {% empty %}<div class="tiny muted">Nobody — everyone has punched out.</div>{% endfor %}
+      </div>
+    </div>
+
+    <div class="card"><div class="hd"><h3>Late today</h3></div><div class="bd">
+      {% for r in late_list %}
+        <div class="kv"><span>{{ r.employee.display_name }}</span>
+          <b style="color:var(--late)">{{ r.check_in|time:"h:i A" }} → {{ r.required_out|time:"h:i A" }}</b></div>
+      {% empty %}<div class="tiny muted">No one is late today.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Pending Approval</h3></div><div class="bd">
+      {% for l in pending_leave_list %}
+        <div class="kv"><span>{{ l.employee.display_name }} · leave</span>
+          <a class="tiny" href="{% url 'leaves:review' %}">{{ l.start_date|date:"d M" }}</a></div>
+      {% endfor %}
+      {% for h in pending_home_list %}
+        <div class="kv"><span>{{ h.employee.display_name }} · home office</span>
+          <a class="tiny" href="{% url 'attendance:home_office_review' %}">{{ h.date|date:"d M" }}</a></div>
+      {% endfor %}
+      {% if not pending_leave_list and not pending_home_list %}<div class="tiny muted">Nothing pending.</div>{% endif %}
+    </div></div>
+
+    {% if no_card or unmatched_punches %}
+    <div class="card"><div class="hd"><h3>Needs attention</h3></div><div class="bd">
+      {% if no_card %}<div class="kv"><span>No card assigned</span>
+        <a class="tiny" href="{% url 'accounts:card_board' %}?card=missing">{{ no_card }} people</a></div>{% endif %}
+      {% if unmatched_punches %}<div class="kv"><span>Unmatched punch</span>
+        <a class="tiny" href="{% url 'attendance:punch_logs' %}?show=unmatched">{{ unmatched_punches }}</a></div>{% endif %}
+    </div></div>
+    {% endif %}
+
+    {% comment %} <div class="card"><div class="hd"><h3>Tasks logged today</h3></div><div class="bd">
+      {% for t in today_tasks %}<div class="kv"><span>{{ t.employee.display_name }}</span><b class="small">{{ t.title|truncatechars:26 }}</b></div>
+      {% empty %}<div class="tiny muted">No tasks logged yet.</div>{% endfor %}
+      <a class="btn sm" style="margin-top:10px" href="{% url 'tasks:task_board' %}">View all tasks</a>
+    </div></div> {% endcomment %}
+  </div>
+</div>
+{% endblock %}

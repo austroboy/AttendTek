@@ -1,0 +1,9 @@
+{% extends "base.html" %}{% block title %}Shift{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}{% if shift %}{{ shift.name }}{% else %}New shift{% endif %}{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="bd">
+  <div class="msg info">An in-punch at 10:02 AM makes required out 7:02 PM — that comes from <b>required hours</b> below.</div>
+  <form method="post">{% csrf_token %}<div class="form-grid">{% include "partials/_form.html" %}</div>
+    <div class="row"><button class="btn primary">Save</button><a class="btn" href="{% url 'accounts:settings' %}">Cancel</a></div></form>
+</div></div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}My tasks{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}Daily tasks{% endblock %}
+{% block content %}
+<div class="grid g-side"><div class="stack">
+  {% for day, items in grouped %}
+  <div class="card"><div class="hd"><h2>{{ day|date:"l, d M Y" }}</h2>
+    <span class="right tiny muted">{{ items|length }} tasks</span></div>
+    <div class="bd flush"><table><tbody>
+      {% for t in items %}<tr>
+        <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details }}</div>{% endif %}</td>
+        <td class="small">{{ t.project|default:"—" }}</td>
+        <td class="mono small">{{ t.hours_spent }}h</td>
+        <td><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span></td>
+        <td><a class="tiny" href="{% url 'tasks:task_delete' t.pk %}">delete</a></td>
+      </tr>{% endfor %}
+    </tbody></table></div></div>
+  {% empty %}
+  <div class="card"><div class="empty"><b>No tasks logged yet</b>Use the form to log what you worked on today.</div></div>
+  {% endfor %}
+</div>
+<div class="card" style="align-self:start"><div class="hd"><h3>Add task</h3></div><div class="bd">
+  <form method="post">{% csrf_token %}{% include "partials/_form.html" %}
+    <button class="btn primary block">Save</button></form>
+  <div class="sep"></div>
+  <div class="kv"><span>Total logged</span><b>{{ total_hours }} hours</b></div>
+</div></div></div>
+{% endblock %}

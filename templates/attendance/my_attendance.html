@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% block title %}My attendance{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}{{ month_name }}{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm" href="?year={{ prev.year }}&month={{ prev.month }}">← {{ prev|date:"F" }}</a>
+  <a class="btn sm" href="?year={{ next.year }}&month={{ next.month }}">{{ next|date:"F" }} →</a>
+</div>
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
+  <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late</div></div>
+  <div class="stat bad"><div class="v">{{ summary.early_out }}</div><div class="l">Early out</div></div>
+  <div class="stat accent"><div class="v">{{ summary.worked_hours }}</div><div class="l">Hours worked</div></div>
+</div>
+
+<div class="card" style="margin-bottom:14px"><div class="bd">
+  <div class="cal" style="margin-bottom:8px">
+    <div class="dow">Mon</div><div class="dow">Tue</div><div class="dow">Wed</div><div class="dow">Thu</div>
+    <div class="dow">Fri</div><div class="dow">Sat</div><div class="dow">Sun</div>
+  </div>
+  <div class="cal">
+    {% for c in cells %}
+      {% if c %}
+      <div class="day">
+        <div class="d">{{ c.date|date:"j" }}</div>
+        {% if c.record %}
+          <span class="badge {{ c.record.badge_class }}" style="font-size:10px;padding:1px 6px">{{ c.record.get_status_display|truncatechars:11 }}</span>
+          {% if c.record.check_in %}<span class="t">{{ c.record.check_in|time:"H:i" }} → {{ c.record.check_out|time:"H:i"|default:"..." }}</span>{% endif %}
+        {% endif %}
+      </div>
+      {% else %}<div class="day empty"></div>{% endif %}
+    {% endfor %}
+  </div>
+</div></div>
+
+<div class="card"><div class="hd"><h2>Day wari</h2></div><div class="bd flush"><div class="table-wrap"><table>
+<thead><tr><th>Date</th><th>In</th><th>Required out</th><th>Out</th><th>Day</th><th>Worked</th><th>Status</th><th>Note</th></tr></thead>
+<tbody>{% for r in records %}<tr>
+  <td class="mono small">{{ r.date|date:"d M, D" }}</td>
+  <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+  <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+  <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+  <td style="min-width:150px">{% include "partials/_tape.html" with record=r %}</td>
+  <td class="mono small">{{ r.worked_display }}</td>
+  <td>{% include "partials/_badge.html" with record=r %}</td>
+  <td class="tiny muted">{{ r.remarks|default:"" }}</td>
+</tr>{% endfor %}</tbody></table></div></div></div>
+{% endblock %}

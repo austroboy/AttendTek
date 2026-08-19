@@ -1,0 +1,24 @@
+{% extends "base.html" %}{% block title %}Reports{% endblock %}
+{% block eyebrow %}Reports{% endblock %}{% block heading %}Reports{% endblock %}
+{% block content %}
+<div class="grid g-3">
+  <a class="card" href="{% url 'reports:monthly' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Grid</div><h2>Monthly sheet</h2>
+    <p class="small muted">Every employee, every day of the month, colour coded on one page.</p></div></a>
+  <a class="card" href="{% url 'reports:employee' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Detail</div><h2>Employee report</h2>
+    <p class="small muted">One employee's day-by-day in/out times, late minutes, overtime and tasks.</p></div></a>
+  <a class="card" href="{% url 'reports:late' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Ranking</div><h2>Late &amp; early out</h2>
+    <p class="small muted">Who was late, how often, and by how many minutes.</p></div></a>
+  <a class="card" href="{% url 'reports:department' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Summary</div><h2>Department summary</h2>
+    <p class="small muted">Punctuality and total hours worked per department.</p></div></a>
+  <a class="card" href="{% url 'reports:export_excel' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Download</div><h2>Excel export</h2>
+    <p class="small muted">The full month's attendance as an .xlsx file.</p></div></a>
+  <a class="card" href="{% url 'reports:export_csv' %}" style="text-decoration:none"><div class="bd">
+    <div class="eyebrow">Download</div><h2>CSV export</h2>
+    <p class="small muted">Plain CSV for your payroll software.</p></div></a>
+</div>
+{% endblock %}

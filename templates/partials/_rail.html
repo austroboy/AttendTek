@@ -1,0 +1,55 @@
+{% load nav %}
+<nav class="rail" id="rail">
+  <div class="brand">
+    <div class="mark">⌚</div>
+    <div><b>{{ site_name }}</b>{% if site_tagline %}<span>{{ site_tagline }}</span>{% endif %}</div>
+  </div>
+
+  {% if user.is_manager %}
+    <div class="group">Overview</div>
+    <a class="nav {% nav_active 'attendance:dashboard' %}" href="{% url 'attendance:dashboard' %}">Dashboard</a>
+    <a class="nav {% nav_active 'attendance:sheet' 'attendance:record_edit' %}" href="{% url 'attendance:sheet' %}">Attendance sheet</a>
+    <a class="nav {% nav_active 'attendance:punch_logs' %}" href="{% url 'attendance:punch_logs' %}">Punch logs</a>
+
+    <div class="group">People</div>
+    <a class="nav {% nav_active 'accounts:employee_list' 'accounts:employee_create' 'accounts:employee_detail' 'accounts:employee_edit' %}" href="{% url 'accounts:employee_list' %}">Employees</a>
+    <a class="nav {% nav_active 'accounts:card_board' %}" href="{% url 'accounts:card_board' %}">RFID cards</a>
+    <a class="nav {% nav_active 'tasks:task_board' %}" href="{% url 'tasks:task_board' %}">Daily tasks</a>
+
+    <div class="group">Requests</div>
+    <a class="nav {% nav_active 'leaves:review' %}" href="{% url 'leaves:review' %}">Leave approvals
+      {% if pending_leaves %}<span class="pill">{{ pending_leaves }}</span>{% endif %}</a>
+    <a class="nav {% nav_active 'attendance:home_office_review' %}" href="{% url 'attendance:home_office_review' %}">Home office
+      {% if pending_home_office %}<span class="pill">{{ pending_home_office }}</span>{% endif %}</a>
+
+    <div class="group">Reports</div>
+    <a class="nav {% nav_active 'reports:monthly' %}" href="{% url 'reports:monthly' %}">Monthly sheet</a>
+    <a class="nav {% nav_active 'reports:employee' %}" href="{% url 'reports:employee' %}">Employee report</a>
+    <a class="nav {% nav_active 'reports:late' %}" href="{% url 'reports:late' %}">Late &amp; early out</a>
+    <a class="nav {% nav_active 'reports:department' %}" href="{% url 'reports:department' %}">Department summary</a>
+
+    <div class="group">Setup</div>
+    <a class="nav {% nav_active 'devices:list' 'devices:create' 'devices:edit' %}" href="{% url 'devices:list' %}">Devices</a>
+    <a class="nav {% nav_active 'accounts:settings' 'accounts:shift_create' 'accounts:shift_edit' 'accounts:department_create' 'accounts:designation_create' %}" href="{% url 'accounts:settings' %}">Shift &amp; rules</a>
+    <a class="nav {% nav_active 'attendance:holidays' %}" href="{% url 'attendance:holidays' %}">Holidays</a>
+    <a class="nav {% nav_active 'leaves:types' %}" href="{% url 'leaves:types' %}">Leave types</a>
+  {% endif %}
+
+  <div class="group">My portal</div>
+  <a class="nav {% nav_active 'attendance:my_portal' %}" href="{% url 'attendance:my_portal' %}">My day</a>
+  <a class="nav {% nav_active 'attendance:my_attendance' %}" href="{% url 'attendance:my_attendance' %}">My attendance</a>
+  <a class="nav {% nav_active 'tasks:my_tasks' %}" href="{% url 'tasks:my_tasks' %}">My tasks</a>
+  <a class="nav {% nav_active 'leaves:my_leaves' %}" href="{% url 'leaves:my_leaves' %}">My leave</a>
+  <a class="nav {% nav_active 'leaves:team' %}" href="{% url 'leaves:team' %}">Who's on leave
+    {% if out_today_count %}<span class="pill count">{{ out_today_count }}</span>{% endif %}</a>
+  <a class="nav {% nav_active 'attendance:home_office' %}" href="{% url 'attendance:home_office' %}">Home office</a>
+
+  <div class="who">
+    <div class="avatar">{{ user.initials }}</div>
+    <div style="min-width:0">
+      <div class="small" style="color:#fff">{{ user.display_name }}</div>
+      <a class="tiny" href="{% url 'accounts:profile' %}" style="color:#7D949A">Profile</a>
+      · <a class="tiny" href="{% url 'accounts:logout' %}" style="color:#7D949A">Log out</a>
+    </div>
+  </div>
+</nav>

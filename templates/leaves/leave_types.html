@@ -1,0 +1,11 @@
+{% extends "base.html" %}{% block title %}Leave types{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}Leave type{% endblock %}
+{% block content %}
+<div class="grid g-2" style="max-width:900px">
+  <div class="card"><div class="hd"><h2>Add new</h2></div><div class="bd">
+    <form method="post">{% csrf_token %}{% include "partials/_form.html" %}<button class="btn primary">Save</button></form></div></div>
+  <div class="card"><div class="hd"><h2>Existing types</h2></div><div class="bd">
+    {% for t in types %}<div class="kv"><span>{{ t.name }}{% if not t.is_paid %} <span class="tiny muted">(unpaid)</span>{% endif %}</span><b>{{ t.annual_quota }} days/year</b></div>
+    {% empty %}<div class="tiny muted">No leave types yet.</div>{% endfor %}</div></div>
+</div>
+{% endblock %}

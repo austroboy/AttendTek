@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Monthly sheet{% endblock %}
+{% block eyebrow %}Reports{% endblock %}{% block heading %}{{ month_label }} — monthly sheet{% endblock %}
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm" href="?year={{ prev.year }}&month={{ prev.month }}&dept={{ dept }}">← {{ prev|date:"F" }}</a>
+  <a class="btn sm" href="?year={{ next.year }}&month={{ next.month }}&dept={{ dept }}">{{ next|date:"F" }} →</a>
+  <form method="get" class="row"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="month" value="{{ month }}">
+    <select class="field" name="dept" style="width:auto"><option value="">All departments</option>
+      {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select>
+    <button class="btn sm">Filter</button></form>
+  <a class="btn right" href="{% url 'reports:export_excel' %}?year={{ year }}&month={{ month }}">Excel</a>
+  <a class="btn" href="{% url 'reports:export_csv' %}?year={{ year }}&month={{ month }}">CSV</a>
+</div>
+
+<div class="card"><div class="hd">
+  <div class="tape-legend">
+    <span><i class="c-ok" style="background:var(--ok)"></i>on time</span>
+    <span><i style="background:var(--late)"></i>late</span>
+    <span><i style="background:#D08A5A"></i>early out</span>
+    <span><i style="background:var(--bad)"></i>absent</span>
+    <span><i style="background:var(--info)"></i>leave / home</span>
+    <span><i style="background:#DBE3E1"></i>off day</span>
+  </div></div>
+  <div class="bd flush"><div class="table-wrap"><table class="mgrid">
+  <thead><tr><th style="text-align:left;min-width:170px">Employee</th>
+    {% for d in days %}<th>{{ d|date:"j" }}</th>{% endfor %}
+    <th>P</th><th>L</th><th>A</th><th>Hrs</th></tr></thead>
+  <tbody>{% for row in rows %}<tr>
+    <td style="text-align:left"><b>{{ row.employee.display_name }}</b>
+      <div class="tiny muted mono">{{ row.employee.employee_id }}</div></td>
+    {% for c in row.cells %}<td>
+      {% if c.record %}<span class="cell c-{{ c.record.badge_class }}" title="{{ c.record.get_status_display }} {{ c.record.check_in|time:'h:i A' }}">{% if c.record.mode == 'HOME' %}H{% elif c.record.status == 'ABSENT' %}A{% elif c.record.status == 'LEAVE' %}L{% elif c.record.is_late %}!{% elif c.record.is_off_day %}·{% else %}✓{% endif %}</span>
+      {% else %}<span class="cell c-empty">·</span>{% endif %}</td>{% endfor %}
+    <td class="mono"><b>{{ row.totals.present }}</b></td>
+    <td class="mono" style="color:var(--late)">{{ row.totals.late }}</td>
+    <td class="mono" style="color:var(--bad)">{{ row.totals.absent }}</td>
+    <td class="mono">{{ row.totals.hours }}</td>
+  </tr>{% empty %}<tr><td colspan="40"><div class="empty"><b>No data</b></div></td></tr>{% endfor %}
+  </tbody></table></div></div></div>
+{% endblock %}

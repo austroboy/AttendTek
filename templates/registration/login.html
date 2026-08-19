@@ -1,0 +1,26 @@
+{% load static %}<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · {{ site_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=Hind+Siliguri:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body style="display:grid;place-items:center;min-height:100vh;background:var(--ink)">
+<div style="width:100%;max-width:390px;padding:20px">
+  <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
+    <div class="mark" style="width:38px;height:38px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:17px">⌚</div>
+    <div><b style="color:#fff;font-family:'Space Grotesk';font-size:17px">{{ site_name }}</b>
+    <div class="tiny" style="color:#7D949A">ZKTeco F18 · RFID card system</div></div>
+  </div>
+  <div class="card"><div class="bd">
+    <div class="eyebrow">Sign in</div>
+    <h2 style="margin:2px 0 14px">Sign in to your account</h2>
+    {% include "partials/_messages.html" %}
+    <form method="post">{% csrf_token %}
+      {% include "partials/_form.html" %}
+      <button class="btn primary block" type="submit">Sign in</button>
+    </form>
+    <div class="tiny muted" style="margin-top:12px">Forgot your password? Contact your office admin.</div>
+  </div></div>
+</div>
+</body></html>

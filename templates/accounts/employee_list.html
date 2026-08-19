@@ -1,0 +1,36 @@
+{% extends "base.html" %}{% block title %}Employees{% endblock %}
+{% block eyebrow %}People{% endblock %}{% block heading %}Employees{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd">
+  <form method="get" class="filters">
+    <div class="fgroup"><label>Search</label><input class="field" name="q" value="{{ q }}" placeholder="Name, employee ID or card no"></div>
+    <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
+      {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+    <div class="fgroup"><label>Card</label><select class="field" name="card"><option value="">All</option>
+      <option value="assigned" {% if card == 'assigned' %}selected{% endif %}>Card assigned</option>
+      <option value="missing" {% if card == 'missing' %}selected{% endif %}>No card assigned</option></select></div>
+    <button class="btn">Filter</button>
+    <a class="btn primary right" href="{% url 'accounts:employee_create' %}">+ Add employee</a>
+  </form>
+</div></div>
+
+{% if no_card_count %}<div class="msg warning">{{ no_card_count }} active employees have no RFID card assigned yet.
+  <a href="{% url 'accounts:card_board' %}">Assign cards →</a></div>{% endif %}
+
+<div class="card"><div class="bd flush"><div class="table-wrap"><table>
+  <thead><tr><th>Employee</th><th>Department</th><th>RFID card ID</th><th>Device user ID</th><th>Shift</th><th>Policy</th><th></th></tr></thead>
+  <tbody>{% for e in employees %}
+    <tr>
+      <td><div class="emp"><div class="avatar">{{ e.initials }}</div><div>
+        <b>{{ e.display_name }}</b><span>{{ e.employee_id }} · {{ e.designation|default:"—" }}</span></div></div></td>
+      <td class="small">{{ e.department|default:"—" }}</td>
+      <td>{% if e.rfid_card_no %}<span class="mono">{{ e.rfid_card_no }}</span>
+          {% else %}<span class="badge bad">no card</span>{% endif %}</td>
+      <td class="mono small">{{ e.device_user_id|default:"—" }}</td>
+      <td class="small">{{ e.shift.name|default:"default" }}</td>
+      <td><span class="badge {% if e.work_policy == 'OFFICE' %}muted{% else %}info{% endif %}">{{ e.get_work_policy_display }}</span></td>
+      <td><a class="btn sm" href="{% url 'accounts:employee_detail' e.pk %}">Details</a></td>
+    </tr>
+  {% empty %}<tr><td colspan="7"><div class="empty"><b>No employees found</b>Try changing the filters.</div></td></tr>{% endfor %}
+  </tbody></table></div></div></div>
+{% endblock %}

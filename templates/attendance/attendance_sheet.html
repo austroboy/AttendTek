@@ -1,0 +1,44 @@
+{% extends "base.html" %}{% block title %}Attendance sheet{% endblock %}
+{% block eyebrow %}Attendance{% endblock %}{% block heading %}Attendance sheet{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>From</label><input class="field" type="date" name="from" value="{{ day_from|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>To</label><input class="field" type="date" name="to" value="{{ day_to|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>Status</label><select class="field" name="status"><option value="">All</option>
+    <option value="problem" {% if status == 'problem' %}selected{% endif %}>Issues only (late / early / absent)</option>
+    {% for v,l in statuses %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
+    {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Employee</label><select class="field" name="employee"><option value="">All</option>
+    {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select></div>
+  <button class="btn primary">Filter</button>
+  <a class="btn right" href="{% url 'reports:export_excel' %}">Excel export</a>
+</form></div></div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat"><div class="v">{{ totals.rows }}</div><div class="l">Total row</div></div>
+  <div class="stat late"><div class="v">{{ totals.late }}</div><div class="l">Late</div></div>
+  <div class="stat bad"><div class="v">{{ totals.early }}</div><div class="l">Early out</div></div>
+  <div class="stat bad"><div class="v">{{ totals.absent }}</div><div class="l">Absent</div></div>
+</div>
+
+<div class="card"><div class="bd flush"><div class="table-wrap"><table>
+<thead><tr><th>Date</th><th>Employee</th><th>Mode</th><th>In</th><th>Required out</th><th>Out</th>
+  <th>Worked</th><th>Late</th><th>Early</th><th>OT</th><th>Status</th><th></th></tr></thead>
+<tbody>{% for r in records %}<tr>
+  <td class="mono small">{{ r.date|date:"d M y" }}</td>
+  <td><div class="emp"><div class="avatar">{{ r.employee.initials }}</div><div>
+    <b>{{ r.employee.display_name }}</b><span>{{ r.employee.employee_id }}</span></div></div></td>
+  <td><span class="badge {% if r.mode == 'HOME' %}info{% else %}muted{% endif %}">{{ r.get_mode_display }}</span></td>
+  <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+  <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+  <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+  <td class="mono small">{{ r.worked_display }}</td>
+  <td class="mono small">{% if r.is_late %}<span style="color:var(--late)">+{{ r.late_minutes }}m</span>{% else %}—{% endif %}</td>
+  <td class="mono small">{% if r.is_early_out %}<span style="color:var(--bad)">−{{ r.early_out_minutes }}m</span>{% else %}—{% endif %}</td>
+  <td class="mono small">{% if r.overtime_minutes %}<span style="color:var(--ok)">{{ r.overtime_minutes }}m</span>{% else %}—{% endif %}</td>
+  <td>{% include "partials/_badge.html" with record=r %}</td>
+  <td><a class="tiny" href="{% url 'attendance:record_edit' r.pk %}">edit</a></td>
+</tr>{% empty %}<tr><td colspan="12"><div class="empty"><b>No records</b>Try a different date range or filter.</div></td></tr>{% endfor %}
+</tbody></table></div></div></div>
+{% endblock %}

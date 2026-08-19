@@ -1,0 +1,42 @@
+{% extends "base.html" %}{% block title %}Home office{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}Home office{% endblock %}
+{% block content %}
+<div class="grid g-side"><div class="stack">
+  {% if running %}
+  <div class="card"><div class="hd"><h2>{{ running.date|date:"d M Y" }} — in progress</h2>
+    <span class="badge warn right">In {{ running.check_in|time:"h:i A" }}</span></div>
+    <div class="bd">
+      <p class="small muted" style="margin-top:0">Log your out time when you finish. The same {{ user.effective_shift.required_hours }}-hour rule applies at home.</p>
+      <form method="post">{% csrf_token %}<input type="hidden" name="form" value="out">
+        {% include "partials/_form.html" with form=out_form %}
+        <button class="btn primary">Save out time</button></form>
+    </div></div>
+  {% else %}
+  <div class="card"><div class="hd"><h2>New home office entry</h2></div><div class="bd">
+    {% if not can_home_office %}<div class="msg warning">Your work policy is "Office only" — ask an admin to enable home office for you.</div>{% endif %}
+    <p class="small muted" style="margin-top:0">Working from home instead of coming in? Log your in time here.
+      It counts straight away and shows on the attendance sheet as Home office.</p>
+    <form method="post">{% csrf_token %}<input type="hidden" name="form" value="start">
+      <div class="form-grid">{% include "partials/_form.html" with form=start_form wide="reason" %}</div>
+      <button class="btn primary">Save in time</button></form>
+  </div></div>
+  {% endif %}
+
+  <div class="card"><div class="hd"><h2>Previous entries</h2></div><div class="bd flush"><table>
+    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th><th>Note</th></tr></thead>
+    <tbody>{% for h in entries %}<tr>
+      <td class="mono small">{{ h.date|date:"d M Y" }}</td>
+      <td class="mono">{{ h.check_in|time:"h:i A"|default:"—" }}</td>
+      <td class="mono">{{ h.check_out|time:"h:i A"|default:"—" }}</td>
+      <td><span class="badge {{ h.badge_class }}">{{ h.get_status_display }}</span></td>
+      <td class="tiny muted">{{ h.review_note|default:h.reason|truncatechars:40 }}</td>
+    </tr>{% empty %}<tr><td colspan="5"><div class="empty"><b>No home office entries yet</b></div></td></tr>{% endfor %}
+    </tbody></table></div></div>
+</div>
+<div class="card" style="align-self:start"><div class="hd"><h3>The rules</h3></div><div class="bd">
+  <div class="kv"><span>Office hours</span><b>{{ user.effective_shift.start_time|time:"h:i A" }} – {{ user.effective_shift.end_time|time:"h:i A" }}</b></div>
+  <div class="kv"><span>Late after</span><b>{{ user.effective_shift.late_after|time:"h:i A" }}</b></div>
+  <div class="kv"><span>Required hours</span><b>{{ user.effective_shift.required_hours }} h</b></div>
+  <p class="tiny muted">The same rule applies at home — a later start means a later required out time.</p>
+</div></div></div>
+{% endblock %}

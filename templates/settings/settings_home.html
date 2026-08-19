@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Settings{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}Shift &amp; office rules{% endblock %}
+{% block content %}
+<div class="grid g-side"><div class="stack">
+  <div class="card"><div class="hd"><h2>Shift / office timing</h2>
+    <a class="btn sm primary right" href="{% url 'accounts:shift_create' %}">+ New shift</a></div>
+    <div class="bd flush"><table>
+    <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Late after</th><th>Required</th><th>Weekend</th><th></th></tr></thead>
+    <tbody>{% for s in shifts %}<tr>
+      <td><b>{{ s.name }}</b>{% if s.is_default %} <span class="badge ok">default</span>{% endif %}</td>
+      <td class="mono">{{ s.start_time|time:"h:i A" }}</td>
+      <td class="mono">{{ s.end_time|time:"h:i A" }}</td>
+      <td class="mono" style="color:var(--late)">{{ s.late_after|time:"h:i A" }}</td>
+      <td class="mono">{{ s.required_hours }} h</td>
+      <td class="tiny muted">{{ s.weekend_days }}</td>
+      <td><a class="tiny" href="{% url 'accounts:shift_edit' s.pk %}">edit</a></td>
+    </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No shifts yet</b>
+      Create one first — 9:00 AM to 6:00 PM, late after 10:00 AM, 9 hours required.</div></td></tr>{% endfor %}
+    </tbody></table></div></div>
+
+  <div class="card"><div class="hd"><h2>How the rules work</h2></div><div class="bd">
+    <div class="kv"><span>Office window</span><b>9:00 AM – 6:00 PM = 9 hours</b></div>
+    <div class="kv"><span>Late</span><b>Punch after 10:00 AM</b></div>
+    <div class="kv"><span>Required out</span><b>max(6:00 PM, in + 9 hours)</b></div>
+    <div class="kv"><span>Example</span><b>In at 10:02 AM → out at 7:02 PM</b></div>
+    <div class="kv"><span>Early out</span><b>Punch before required out</b></div>
+    <div class="kv"><span>Late + early</span><b>Both together get their own status</b></div>
+  </div></div>
+</div>
+<div class="stack">
+  <div class="card"><div class="hd"><h3>Department</h3>
+    <a class="right tiny" href="{% url 'accounts:department_create' %}">+ add</a></div><div class="bd">
+    {% for d in departments %}<div class="kv"><span>{{ d.name }}</span><b>{{ d.members.count }}</b></div>
+    {% empty %}<div class="tiny muted">Nothing yet.</div>{% endfor %}</div></div>
+  <div class="card"><div class="hd"><h3>Designation</h3>
+    <a class="right tiny" href="{% url 'accounts:designation_create' %}">+ add</a></div><div class="bd">
+    {% for d in designations %}<div class="kv"><span>{{ d.title }}</span><b>{{ d.members.count }}</b></div>
+    {% empty %}<div class="tiny muted">Nothing yet.</div>{% endfor %}</div></div>
+</div></div>
+{% endblock %}

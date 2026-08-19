@@ -1,0 +1,21 @@
+{% extends "base.html" %}{% block title %}Department report{% endblock %}
+{% block eyebrow %}Reports · {{ month_label }}{% endblock %}{% block heading %}Department summary{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>Year</label><input class="field" type="number" name="year" value="{{ year }}" style="width:110px"></div>
+  <div class="fgroup"><label>Month</label><input class="field" type="number" name="month" value="{{ month }}" min="1" max="12" style="width:90px"></div>
+  <button class="btn primary">Show</button></form></div></div>
+<div class="grid g-3">{% for r in rows %}
+  <div class="card"><div class="hd"><h2>{{ r.dept.name }}</h2><span class="badge muted right">{{ r.headcount }} people</span></div>
+    <div class="bd">
+      <div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;width:{{ r.punctuality }}%;background:var(--ok)"></div></div>
+      <div class="kv"><span>Punctuality</span><b>{{ r.punctuality }}%</b></div>
+      <div class="kv"><span>On time</span><b>{{ r.on_time }}</b></div>
+      <div class="kv"><span>Late</span><b style="color:var(--late)">{{ r.late }}</b></div>
+      <div class="kv"><span>Absent</span><b style="color:var(--bad)">{{ r.absent }}</b></div>
+      <div class="kv"><span>Home office</span><b>{{ r.home }}</b></div>
+      <div class="kv"><span>Total hours</span><b>{{ r.hours }}</b></div>
+    </div></div>
+{% empty %}<div class="card"><div class="empty"><b>No departments yet</b></div></div>{% endfor %}</div>
+{% endblock %}

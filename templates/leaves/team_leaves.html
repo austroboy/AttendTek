@@ -1,0 +1,98 @@
+{% extends "base.html" %}{% block title %}Who's on leave{% endblock %}
+{% block eyebrow %}Team · {{ day|date:"d M Y" }}{% endblock %}{% block heading %}Who's on leave{% endblock %}
+
+{% block content %}
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat info"><div class="v">{{ on_leave_today|length }}</div><div class="l">On leave today</div></div>
+  <div class="stat accent"><div class="v">{{ home_office_today|length }}</div><div class="l">Home office today</div></div>
+  <div class="stat late"><div class="v">{{ pending_count }}</div><div class="l">Awaiting approval</div></div>
+  <div class="stat"><div class="v">{{ upcoming|length }}</div><div class="l">Starting in 14 days</div></div>
+</div>
+
+<div class="grid g-side">
+  <div class="stack">
+    <div class="card">
+      <div class="hd"><h2>All requests</h2>
+        <form method="get" class="row right">
+          <select class="field" name="status" style="width:auto">
+            <option value="">Any status</option>
+            {% for v, l in statuses %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+          </select>
+          <input class="field" type="month" name="month" value="{{ month }}" style="width:auto">
+          <button class="btn sm">Filter</button>
+        </form>
+      </div>
+      <div class="bd flush"><div class="table-wrap"><table>
+        <thead><tr>
+          <th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th>
+          {% if can_approve %}<th>Reason</th>{% endif %}
+          <th>Status</th><th>{% if can_approve %}Decision{% else %}Reviewed by{% endif %}</th>
+        </tr></thead>
+        <tbody>
+        {% for l in requests %}
+          <tr>
+            <td><div class="emp"><div class="avatar">{{ l.employee.initials }}</div><div>
+              <b>{{ l.employee.display_name }}</b>
+              <span>{{ l.employee.department|default:l.employee.employee_id }}</span></div></div></td>
+            <td class="small">{{ l.leave_type.name }}</td>
+            <td class="mono small">{{ l.start_date|date:"d M y" }}</td>
+            <td class="mono small">{{ l.end_date|date:"d M y" }}</td>
+            <td class="mono">{{ l.total_days }}</td>
+            {% if can_approve %}<td class="small">{{ l.reason|truncatechars:50 }}</td>{% endif %}
+            <td><span class="badge {{ l.badge_class }}">{{ l.get_status_display }}</span></td>
+            <td>
+              {% if can_approve and l.status == 'PENDING' %}
+                <form method="post" action="{% url 'leaves:decide' l.pk 'approve' %}" style="display:inline">{% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'leaves:team' %}">
+                  <button class="btn sm ok">Approve</button></form>
+                <form method="post" action="{% url 'leaves:decide' l.pk 'reject' %}" style="display:inline">{% csrf_token %}
+                  <input type="hidden" name="next" value="{% url 'leaves:team' %}">
+                  <button class="btn sm danger">Reject</button></form>
+              {% else %}
+                <span class="tiny muted">{{ l.reviewed_by.display_name|default:"—" }}</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="8"><div class="empty"><b>No leave requests</b>
+            Nothing matches these filters yet.</div></td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div></div>
+    </div>
+
+    {% if not can_approve %}
+      <div class="msg info">Anyone on the team can see this board, but only an admin can approve or reject a request.
+        Reasons stay private between the requester and the admin.</div>
+    {% endif %}
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>Out today</h3></div><div class="bd">
+      {% for l in on_leave_today %}
+        <div class="kv"><span>{{ l.employee.display_name }}</span>
+          <b class="small">{{ l.leave_type.name }} · till {{ l.end_date|date:"d M" }}</b></div>
+      {% empty %}<div class="tiny muted">Everyone is in today.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Working from home today</h3></div><div class="bd">
+      {% for h in home_office_today %}
+        <div class="kv"><span>{{ h.employee.display_name }}</span>
+          <b class="mono small">{{ h.check_in|time:"h:i A" }}{% if h.check_out %} → {{ h.check_out|time:"h:i A" }}{% endif %}</b></div>
+      {% empty %}<div class="tiny muted">Nobody logged a home office day.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Coming up</h3><span class="right tiny muted">next 14 days</span></div><div class="bd">
+      {% for l in upcoming %}
+        <div class="kv"><span>{{ l.employee.display_name }}</span>
+          <b class="small">{{ l.start_date|date:"d M" }}{% if l.total_days > 1 %} – {{ l.end_date|date:"d M" }}{% endif %}</b></div>
+      {% empty %}<div class="tiny muted">No approved leave coming up.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="bd">
+      <a class="btn primary block" href="{% url 'leaves:my_leaves' %}">Request leave</a>
+      {% if can_approve %}<a class="btn block" style="margin-top:8px" href="{% url 'leaves:review' %}">Go to approvals</a>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

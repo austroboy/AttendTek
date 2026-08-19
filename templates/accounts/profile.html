@@ -1,0 +1,17 @@
+{% extends "base.html" %}{% block title %}Profile{% endblock %}
+{% block eyebrow %}Account{% endblock %}{% block heading %}My profile{% endblock %}
+{% block content %}
+<div class="grid g-2" style="max-width:900px">
+  <div class="card"><div class="hd"><h2>Edit profile</h2></div><div class="bd">
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      {% include "partials/_form.html" %}<button class="btn primary">Save</button></form>
+  </div></div>
+  <div class="card"><div class="hd"><h2>Office details</h2></div><div class="bd">
+    <div class="kv"><span>Employee ID</span><b>{{ user.employee_id }}</b></div>
+    <div class="kv"><span>RFID card</span><b>{{ user.rfid_card_no|default:"not assigned" }}</b></div>
+    <div class="kv"><span>Department</span><b>{{ user.department|default:"—" }}</b></div>
+    <div class="kv"><span>Shift</span><b>{{ user.effective_shift }}</b></div>
+    <div class="kv"><span>Work policy</span><b>{{ user.get_work_policy_display }}</b></div>
+  </div></div>
+</div>
+{% endblock %}

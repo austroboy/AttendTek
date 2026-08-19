@@ -1,0 +1,13 @@
+{% extends "base.html" %}{% block title %}Edit record{% endblock %}
+{% block eyebrow %}{{ record.employee.display_name }} · {{ record.date|date:"d M Y" }}{% endblock %}
+{% block heading %}Correct attendance record{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="bd">
+  <div class="msg info">Punches from device: <b>{{ record.punch_count }}</b>.
+    With manual override on, this day is no longer recalculated automatically.</div>
+  <form method="post">{% csrf_token %}
+    <div class="form-grid">{% include "partials/_form.html" with wide="remarks is_manual_override" %}</div>
+    <div class="row"><button class="btn primary">Save</button><a class="btn" href="{% url 'attendance:sheet' %}">Back</a></div>
+  </form>
+</div></div>
+{% endblock %}

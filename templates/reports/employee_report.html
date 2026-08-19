@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% block title %}Employee report{% endblock %}
+{% block eyebrow %}Reports · {{ month_label }}{% endblock %}
+{% block heading %}{{ employee.display_name|default:"Employee report" }}{% endblock %}
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>Employee</label><select class="field" name="employee">
+    {% for e in employees %}<option value="{{ e.id }}" {% if employee.id == e.id %}selected{% endif %}>{{ e.display_name }} ({{ e.employee_id }})</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Year</label><input class="field" type="number" name="year" value="{{ year }}" style="width:100px"></div>
+  <div class="fgroup"><label>Month</label><input class="field" type="number" name="month" value="{{ month }}" min="1" max="12" style="width:90px"></div>
+  <button class="btn primary">Show</button>
+</form></div></div>
+
+{% if summary %}
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
+  <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late days</div></div>
+  <div class="stat bad"><div class="v">{{ summary.early_out }}</div><div class="l">Early out</div></div>
+  <div class="stat accent"><div class="v">{{ summary.worked_hours }}</div><div class="l">Total hours</div></div>
+</div>
+{% endif %}
+
+<div class="card"><div class="hd"><h2>Day wari</h2><span class="right tiny muted">Required out = the time 9 hours is completed</span></div>
+  <div class="bd flush"><div class="table-wrap"><table>
+  <thead><tr><th>Date</th><th>Mode</th><th>In</th><th>Required out</th><th>Out</th><th>Day</th>
+    <th>Worked</th><th>Late</th><th>Early</th><th>OT</th><th>Status</th></tr></thead>
+  <tbody>{% for r in records %}<tr>
+    <td class="mono small">{{ r.date|date:"d M, D" }}</td>
+    <td class="tiny">{{ r.get_mode_display }}</td>
+    <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+    <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+    <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+    <td style="min-width:150px">{% include "partials/_tape.html" with record=r %}</td>
+    <td class="mono small">{{ r.worked_display }}</td>
+    <td class="mono small">{{ r.late_minutes }}m</td>
+    <td class="mono small">{{ r.early_out_minutes }}m</td>
+    <td class="mono small">{{ r.overtime_minutes }}m</td>
+    <td>{% include "partials/_badge.html" with record=r %}</td>
+  </tr>{% endfor %}</tbody></table></div></div></div>
+
+<div class="card" style="margin-top:14px"><div class="hd"><h2>Tasks logged this month</h2></div><div class="bd">
+  {% for t in tasks %}<div class="kv"><span>{{ t.date|date:"d M" }} · {{ t.title }}</span><b>{{ t.hours_spent }}h</b></div>
+  {% empty %}<div class="tiny muted">No tasks yet.</div>{% endfor %}</div></div>
+{% endblock %}
