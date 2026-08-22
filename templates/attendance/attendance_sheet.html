@@ -24,7 +24,7 @@
 
 <div class="card"><div class="bd flush"><div class="table-wrap"><table>
 <thead><tr><th>Date</th><th>Employee</th><th>Mode</th><th>In</th><th>Required out</th><th>Out</th>
-  <th>Worked</th><th>Late</th><th>Early</th><th>OT</th><th>Status</th><th></th></tr></thead>
+  <th>Worked</th><th>Trips</th><th>Late</th><th>Early</th><th>OT</th><th>Status</th><th></th></tr></thead>
 <tbody>{% for r in records %}<tr>
   <td class="mono small">{{ r.date|date:"d M y" }}</td>
   <td><div class="emp"><div class="avatar">{{ r.employee.initials }}</div><div>
@@ -34,11 +34,12 @@
   <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
   <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
   <td class="mono small">{{ r.worked_display }}</td>
+  <td class="mono small">{% if r.trip_count %}{{ r.trip_count }} · {{ r.outside_minutes }}m{% else %}—{% endif %}</td>
   <td class="mono small">{% if r.is_late %}<span style="color:var(--late)">+{{ r.late_minutes }}m</span>{% else %}—{% endif %}</td>
   <td class="mono small">{% if r.is_early_out %}<span style="color:var(--bad)">−{{ r.early_out_minutes }}m</span>{% else %}—{% endif %}</td>
   <td class="mono small">{% if r.overtime_minutes %}<span style="color:var(--ok)">{{ r.overtime_minutes }}m</span>{% else %}—{% endif %}</td>
   <td>{% include "partials/_badge.html" with record=r %}</td>
   <td><a class="tiny" href="{% url 'attendance:record_edit' r.pk %}">edit</a></td>
-</tr>{% empty %}<tr><td colspan="12"><div class="empty"><b>No records</b>Try a different date range or filter.</div></td></tr>{% endfor %}
+</tr>{% empty %}<tr><td colspan="13"><div class="empty"><b>No records</b>Try a different date range or filter.</div></td></tr>{% endfor %}
 </tbody></table></div></div></div>
 {% endblock %}

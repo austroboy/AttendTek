@@ -19,4 +19,6 @@ urlpatterns = [
     path("me/", views.my_portal, name="my_portal"),
     path("me/attendance/", views.my_attendance, name="my_attendance"),
     path("me/home-office/", views.home_office, name="home_office"),
+    path("me/trips/", views.my_outings, name="my_outings"),
+    path("trips/<int:pk>/edit/", views.outing_edit, name="outing_edit"),
 ]

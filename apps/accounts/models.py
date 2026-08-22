@@ -52,9 +52,23 @@ class Shift(models.Model):
             "On: the required out time is only pushed back when the employee is late."
         ),
     )
+    duplicate_window_minutes = models.PositiveIntegerField(
+        default=3,
+        help_text=(
+            "Two punches this close together are the same tap read twice, "
+            "so the second one is ignored."
+        ),
+    )
+    min_outing_minutes = models.PositiveIntegerField(
+        default=5,
+        help_text=(
+            "A trip out of the office shorter than this is ignored - it is "
+            "usually someone tapping the reader twice by mistake."
+        ),
+    )
     min_out_gap_minutes = models.PositiveIntegerField(
         default=60,
-        help_text="A second punch within this many minutes of the first is treated as a duplicate tap",
+        help_text="No longer used - kept so old data is not lost.",
     )
     weekend_days = models.CharField(
         max_length=20, default="4,5",

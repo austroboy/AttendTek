@@ -10,15 +10,19 @@
     {% if unmatched_total %}<span class="badge bad right">{{ unmatched_total }} unmatched</span>{% endif %}
   </div>
   <div class="bd flush"><div class="table-wrap"><table>
-    <thead><tr><th>Time</th><th>Employee</th><th>Card no</th><th>Device user</th><th>Source</th><th>Device</th></tr></thead>
+    <thead><tr><th>#</th><th>Time</th><th>In / out</th><th>Employee</th><th>Card no</th><th>Device user</th><th>Source</th></tr></thead>
     <tbody>{% for l in logs %}<tr>
+      <td class="mono tiny">{{ l.sequence|default:"—" }}</td>
       <td class="mono">{{ l.punch_time|time:"h:i:s A" }}</td>
+      <td>{% if l.is_ignored %}<span class="badge muted">duplicate tap</span>
+          {% elif l.direction == 'IN' %}<span class="badge ok">In</span>
+          {% elif l.direction == 'OUT' %}<span class="badge info">Out</span>
+          {% else %}<span class="tiny muted">—</span>{% endif %}</td>
       <td>{% if l.employee %}{{ l.employee.display_name }}{% else %}<span class="badge bad">unmatched</span>{% endif %}</td>
       <td class="mono small">{{ l.card_no|default:"—" }}</td>
       <td class="mono small">{{ l.device_user_id|default:"—" }}</td>
       <td><span class="badge muted">{{ l.get_source_display }}</span></td>
-      <td class="small">{{ l.device.name|default:"—" }}</td>
-    </tr>{% empty %}<tr><td colspan="6"><div class="empty"><b>No punches on this day</b>Sync the device to pull them in.</div></td></tr>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No punches on this day</b>Sync the device to pull them in.</div></td></tr>{% endfor %}
     </tbody></table></div></div></div>
 </div>
 <div class="card" style="align-self:start"><div class="hd"><h3>Manual punch</h3></div><div class="bd">

@@ -13,7 +13,7 @@ from apps.utils import now as app_now, today as app_today
 
 from apps.accounts.models import Department, User
 from apps.accounts.permissions import manager_required
-from apps.attendance.models import DailyAttendance
+from apps.attendance.models import DailyAttendance, Outing
 from apps.attendance.services import month_summary
 from apps.tasks.models import DailyTask
 
@@ -208,4 +208,96 @@ def export_excel(request):
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
     response["Content-Disposition"] = f'attachment; filename="attendance-{year}-{month:02d}.xlsx"'
+    return response
+
+
+@manager_required
+def outing_report(request):
+    """Where the team went during working hours, and for how long."""
+    today = app_today()
+    day_from = request.GET.get("from")
+    day_to = request.GET.get("to")
+    try:
+        day_from = datetime.strptime(day_from, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        day_from = today - timedelta(days=13)
+    try:
+        day_to = datetime.strptime(day_to, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        day_to = today
+
+    purpose = request.GET.get("purpose", "")
+    emp_id = request.GET.get("employee", "")
+    dept = request.GET.get("dept", "")
+
+    outings = (Outing.objects
+               .filter(date__range=(day_from, day_to))
+               .select_related("employee", "employee__department"))
+    if purpose:
+        outings = outings.filter(purpose=purpose)
+    if emp_id:
+        outings = outings.filter(employee_id=emp_id)
+    if dept:
+        outings = outings.filter(employee__department_id=dept)
+    outings = outings.order_by("-date", "left_at")
+
+    per_employee = (outings.values(
+                        "employee__id", "employee__employee_id",
+                        "employee__first_name", "employee__last_name")
+                    .annotate(trips=Count("id"),
+                              total_minutes=Sum("minutes"),
+                              official=Count("id", filter=Q(purpose=Outing.Purpose.OFFICIAL)),
+                              personal=Count("id", filter=Q(purpose=Outing.Purpose.PERSONAL)),
+                              unstated=Count("id", filter=Q(purpose=Outing.Purpose.UNSPECIFIED)))
+                    .order_by("-total_minutes"))
+
+    totals = outings.aggregate(
+        trips=Count("id"),
+        total_minutes=Sum("minutes"),
+        official_minutes=Sum("minutes", filter=Q(purpose=Outing.Purpose.OFFICIAL)),
+        personal_minutes=Sum("minutes", filter=Q(purpose=Outing.Purpose.PERSONAL)),
+        unstated=Count("id", filter=Q(purpose=Outing.Purpose.UNSPECIFIED)),
+    )
+
+    return render(request, "reports/outing_report.html", {
+        "outings": outings[:400],
+        "per_employee": per_employee,
+        "totals": totals,
+        "day_from": day_from, "day_to": day_to,
+        "purpose": purpose, "emp_id": emp_id, "dept": dept,
+        "purposes": Outing.Purpose.choices,
+        "employees": User.objects.active_staff(),
+        "departments": Department.objects.all(),
+        "out_now": outings.filter(returned_at__isnull=True).count(),
+    })
+
+
+@manager_required
+def export_outings_csv(request):
+    """The same trips as a spreadsheet."""
+    today = app_today()
+    try:
+        day_from = datetime.strptime(request.GET.get("from"), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        day_from = today - timedelta(days=13)
+    try:
+        day_to = datetime.strptime(request.GET.get("to"), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        day_to = today
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="trips-{day_from}-to-{day_to}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["Date", "Employee ID", "Name", "Department", "Left at", "Returned at",
+                     "Minutes", "Purpose", "Counts as work", "Destination", "Note"])
+    for o in (Outing.objects.filter(date__range=(day_from, day_to))
+              .select_related("employee", "employee__department").order_by("date", "left_at")):
+        writer.writerow([
+            o.date.strftime("%Y-%m-%d"), o.employee.employee_id, o.employee.display_name,
+            o.employee.department.name if o.employee.department else "",
+            o.left_at.strftime("%I:%M %p"),
+            o.returned_at.strftime("%I:%M %p") if o.returned_at else "still out",
+            o.minutes, o.get_purpose_display(), "Yes" if o.counts_as_work else "No",
+            o.destination, o.note,
+        ])
     return response

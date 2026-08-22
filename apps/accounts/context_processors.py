@@ -13,6 +13,8 @@ def sidebar_badges(request):
 
     from apps.attendance.models import HomeOfficeEntry
     from apps.leaves.models import LeaveRequest
+    from datetime import timedelta
+
     from apps.utils import today
 
     day = today()
@@ -20,7 +22,14 @@ def sidebar_badges(request):
         status=LeaveRequest.Status.APPROVED, start_date__lte=day, end_date__gte=day
     ).count()
 
+    from apps.attendance.models import Outing
+
+    data["my_unlabelled_trips"] = Outing.objects.filter(
+        employee=user, purpose=Outing.Purpose.UNSPECIFIED).count()
+
     if user.is_manager:
+        data["unexplained_total"] = Outing.objects.filter(
+            purpose=Outing.Purpose.UNSPECIFIED, date__gte=day - timedelta(days=30)).count()
         data["pending_leaves"] = LeaveRequest.objects.filter(status="PENDING").count()
         data["pending_home_office"] = HomeOfficeEntry.objects.filter(status="PENDING").count()
     return data

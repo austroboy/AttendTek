@@ -16,8 +16,9 @@ from apps.tasks.forms import DailyTaskForm
 from apps.tasks.models import DailyTask
 
 from .forms import (AttendanceOverrideForm, HolidayForm, HomeOfficeOutForm,
-                    HomeOfficeReviewForm, HomeOfficeStartForm, ManualPunchForm)
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, PunchLog
+                    HomeOfficeReviewForm, HomeOfficeStartForm, ManualPunchForm,
+                    OutingAdminForm, OutingForm)
+from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
 from .rules import required_out_time
 from .services import day_summary, mark_absentees, month_summary, rebuild_day, record_punch
 
@@ -60,6 +61,12 @@ def dashboard(request):
         "still_in": records.filter(check_in__isnull=False, check_out__isnull=True),
         "pending_leave_list": LeaveRequest.objects.filter(status="PENDING").select_related("employee")[:5],
         "pending_home_list": HomeOfficeEntry.objects.filter(status="PENDING").select_related("employee")[:5],
+        "out_now": Outing.objects.filter(date=day, returned_at__isnull=True)
+                         .select_related("employee"),
+        "todays_outings": Outing.objects.filter(date=day)
+                                .select_related("employee").order_by("left_at")[:10],
+        "unexplained_trips": Outing.objects.filter(
+            date=day, purpose=Outing.Purpose.UNSPECIFIED).count(),
         "unmatched_punches": PunchLog.objects.filter(is_matched=False).count(),
         "no_card": User.objects.filter(is_active=True).filter(
             Q(rfid_card_no__isnull=True) | Q(rfid_card_no="")).count(),
@@ -234,7 +241,11 @@ def my_portal(request):
         return redirect("attendance:my_portal")
 
     shift = me.effective_shift
+    todays_outings = Outing.objects.filter(employee=me, date=today).order_by("left_at")
     return render(request, "dashboard/employee_portal.html", {
+        "todays_outings": todays_outings,
+        "unlabelled_trips": Outing.objects.filter(
+            employee=me, purpose=Outing.Purpose.UNSPECIFIED).count(),
         "today": today,
         "record": record,
         "shift": shift,
@@ -315,3 +326,59 @@ def home_office(request):
         "today": today,
         "can_home_office": me.can_home_office,
     })
+
+
+# ================================================================ TRIPS OUT
+@login_required
+def my_outings(request):
+    """Trips out of the office - the employee says where they went and why."""
+    me = request.user
+    today = app_today()
+    day_from = _parse_date(request.GET.get("from"), today - timedelta(days=13))
+    day_to = _parse_date(request.GET.get("to"), today)
+
+    outings = (Outing.objects.filter(employee=me, date__range=(day_from, day_to))
+               .select_related("day").order_by("-date", "left_at"))
+
+    if request.method == "POST":
+        outing = get_object_or_404(Outing, pk=request.POST.get("outing_id"), employee=me)
+        form = OutingForm(request.POST, instance=outing)
+        if form.is_valid():
+            form.save()
+            rebuild_day(me, outing.date)
+            messages.success(request, f"Trip at {outing.left_at:%I:%M %p} saved.")
+        else:
+            messages.error(request, "Please choose a purpose before saving.")
+        return redirect(f"{request.path}?from={day_from}&to={day_to}")
+
+    grouped = {}
+    for o in outings:
+        grouped.setdefault(o.date, []).append(o)
+
+    rows = [
+        {"date": d, "outings": items,
+         "forms": [OutingForm(instance=o, prefix=f"o{o.pk}") for o in items],
+         "total": sum(o.minutes for o in items)}
+        for d, items in grouped.items()
+    ]
+
+    return render(request, "attendance/my_outings.html", {
+        "rows": rows,
+        "day_from": day_from, "day_to": day_to,
+        "pending": outings.filter(purpose=Outing.Purpose.UNSPECIFIED).count(),
+        "total_minutes": sum(o.minutes for o in outings),
+        "trip_count": outings.count(),
+    })
+
+
+@manager_required
+def outing_edit(request, pk):
+    """An admin can correct a trip and decide whether it counts as work."""
+    outing = get_object_or_404(Outing.objects.select_related("employee"), pk=pk)
+    form = OutingAdminForm(request.POST or None, instance=outing)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        rebuild_day(outing.employee, outing.date)
+        messages.success(request, f"{outing.employee.display_name}'s trip updated.")
+        return redirect(request.POST.get("next") or "reports:outings")
+    return render(request, "attendance/outing_edit.html", {"form": form, "outing": outing})

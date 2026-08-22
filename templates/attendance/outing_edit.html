@@ -1,0 +1,19 @@
+{% extends "base.html" %}{% block title %}Edit trip{% endblock %}
+{% block eyebrow %}{{ outing.employee.display_name }} · {{ outing.date|date:"d M Y" }}{% endblock %}
+{% block heading %}Trip out of the office{% endblock %}
+{% block content %}
+<div class="card" style="max-width:640px"><div class="bd">
+  <div class="kv"><span>Left at</span><b>{{ outing.left_at|time:"h:i A" }}</b></div>
+  <div class="kv"><span>Returned</span><b>{{ outing.returned_at|time:"h:i A"|default:"still out" }}</b></div>
+  <div class="kv"><span>Duration</span><b>{{ outing.minutes }} min</b></div>
+  <div class="sep"></div>
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.GET.next|default:'' }}">
+    <div class="form-grid">{% include "partials/_form.html" with wide="note counts_as_work" %}</div>
+    <div class="row"><button class="btn primary">Save</button>
+      <a class="btn" href="{% url 'reports:outings' %}">Cancel</a></div>
+  </form>
+  <p class="tiny muted" style="margin-top:12px">Unticking "count as working hours" adds this
+    time to the employee's required out time for that day.</p>
+</div></div>
+{% endblock %}

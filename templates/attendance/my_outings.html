@@ -1,0 +1,74 @@
+{% extends "base.html" %}{% block title %}My trips{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}Trips out of the office{% endblock %}
+
+{% block content %}
+{% if pending %}
+<div class="msg warning">
+  <b>{{ pending }} trip{{ pending|pluralize }} still need a purpose.</b>
+  Until you say what a trip was for it is counted as office work by default —
+  but it shows up on the admin's report as unexplained.
+</div>
+{% endif %}
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat accent"><div class="v">{{ trip_count }}</div><div class="l">Trips in this range</div></div>
+  <div class="stat info"><div class="v">{{ total_minutes }}</div><div class="l">Minutes out</div></div>
+  <div class="stat late"><div class="v">{{ pending }}</div><div class="l">Waiting for a purpose</div></div>
+  <div class="stat"><div class="v">{{ rows|length }}</div><div class="l">Days with trips</div></div>
+</div>
+
+<div class="card" style="margin-bottom:14px"><div class="bd">
+  <form method="get" class="filters">
+    <div class="fgroup"><label>From</label><input class="field" type="date" name="from" value="{{ day_from|date:'Y-m-d' }}"></div>
+    <div class="fgroup"><label>To</label><input class="field" type="date" name="to" value="{{ day_to|date:'Y-m-d' }}"></div>
+    <button class="btn primary">Show</button>
+  </form>
+</div></div>
+
+{% for row in rows %}
+<div class="card" style="margin-bottom:14px">
+  <div class="hd"><h2>{{ row.date|date:"l, d M Y" }}</h2>
+    <span class="right tiny muted">{{ row.outings|length }} trip{{ row.outings|length|pluralize }} · {{ row.total }} min out</span>
+  </div>
+  <div class="bd">
+    {% for o in row.outings %}
+      <div style="border:1px solid var(--line);border-radius:8px;padding:13px;margin-bottom:10px">
+        <div class="row" style="margin-bottom:10px">
+          <span class="mono" style="font-size:15px">{{ o.left_at|time:"h:i A" }} → {% if o.returned_at %}{{ o.returned_at|time:"h:i A" }}{% else %}<span style="color:var(--late)">still out</span>{% endif %}</span>
+          <span class="badge {{ o.badge_class }}">{{ o.get_purpose_display }}</span>
+          <span class="tiny muted">{{ o.duration_display }}</span>
+          {% if not o.counts_as_work %}<span class="badge bad">not counted as work</span>{% endif %}
+        </div>
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="outing_id" value="{{ o.pk }}">
+          <div class="form-grid">
+            <div class="fgroup"><label>Purpose</label>
+              <select class="field select" name="purpose" required>
+                <option value="">— choose —</option>
+                <option value="OFFICIAL" {% if o.purpose == 'OFFICIAL' %}selected{% endif %}>Official work</option>
+                <option value="PERSONAL" {% if o.purpose == 'PERSONAL' %}selected{% endif %}>Personal</option>
+                <option value="BREAK" {% if o.purpose == 'BREAK' %}selected{% endif %}>Break / meal</option>
+              </select></div>
+            <div class="fgroup"><label>Where did you go?</label>
+              <input class="field" name="destination" value="{{ o.destination }}" placeholder="e.g. Client office, Gulshan"></div>
+            <div class="fgroup full"><label>What was it for?</label>
+              <textarea class="field" name="note" rows="2" placeholder="e.g. Delivered the signed contract">{{ o.note }}</textarea></div>
+          </div>
+          <button class="btn primary sm">Save this trip</button>
+        </form>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% empty %}
+<div class="card"><div class="empty"><b>No trips recorded in this range</b>
+  Every time you tap the reader on the way out and again on the way back, the gap shows up here.</div></div>
+{% endfor %}
+
+<div class="msg info">
+  <b>How this works.</b> The first punch of the day is your arrival, the second is you
+  leaving, the third is you coming back, and so on. Office trips still count towards your
+  {{ user.effective_shift.required_hours }} hours; personal time does not, and pushes your
+  required out time back by the same amount.
+</div>
+{% endblock %}

@@ -8,7 +8,7 @@ from apps.utils import now as app_now, today as app_today
 from apps.accounts.forms import StyledFormMixin
 from apps.accounts.models import User
 
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, PunchLog
+from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
 
 
 class HomeOfficeStartForm(StyledFormMixin, forms.ModelForm):
@@ -111,3 +111,42 @@ class HolidayForm(StyledFormMixin, forms.ModelForm):
         model = Holiday
         fields = ["date", "title", "is_optional"]
         widgets = {"date": forms.DateInput(attrs={"type": "date"})}
+
+
+class OutingForm(StyledFormMixin, forms.ModelForm):
+    """What the employee fills in for one trip out of the office."""
+
+    class Meta:
+        model = Outing
+        fields = ["purpose", "destination", "note"]
+        widgets = {"note": forms.Textarea(attrs={"rows": 2})}
+        labels = {
+            "purpose": "Purpose",
+            "destination": "Where did you go?",
+            "note": "What was it for?",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["purpose"].choices = [
+            c for c in Outing.Purpose.choices if c[0] != Outing.Purpose.UNSPECIFIED
+        ]
+        self.fields["destination"].widget.attrs["placeholder"] = "e.g. Client office, Gulshan"
+
+
+class OutingAdminForm(StyledFormMixin, forms.ModelForm):
+    """Admins can also decide whether the time counts towards the hours."""
+
+    class Meta:
+        model = Outing
+        fields = ["purpose", "destination", "note", "counts_as_work"]
+        widgets = {"note": forms.Textarea(attrs={"rows": 2})}
+        labels = {"counts_as_work": "Count this time as working hours"}
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        # Setting the checkbox by hand overrides what the purpose would imply.
+        obj.is_admin_adjusted = obj.counts_as_work != (obj.purpose in Outing.PAID_PURPOSES)
+        if commit:
+            obj.save()
+        return obj

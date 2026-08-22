@@ -1,0 +1,64 @@
+{% extends "base.html" %}{% block title %}Trips report{% endblock %}
+{% block eyebrow %}Reports{% endblock %}{% block heading %}Trips out of the office{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>From</label><input class="field" type="date" name="from" value="{{ day_from|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>To</label><input class="field" type="date" name="to" value="{{ day_to|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>Purpose</label><select class="field" name="purpose"><option value="">All</option>
+    {% for v,l in purposes %}<option value="{{ v }}" {% if purpose == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Employee</label><select class="field" name="employee"><option value="">All</option>
+    {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
+    {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+  <button class="btn primary">Filter</button>
+  <a class="btn right" href="{% url 'reports:export_outings' %}?from={{ day_from|date:'Y-m-d' }}&to={{ day_to|date:'Y-m-d' }}">CSV</a>
+</form></div></div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat accent"><div class="v">{{ totals.trips|default:0 }}</div><div class="l">Trips</div></div>
+  <div class="stat ok"><div class="v">{{ totals.official_minutes|default:0 }}</div><div class="l">Minutes on office work</div></div>
+  <div class="stat late"><div class="v">{{ totals.personal_minutes|default:0 }}</div><div class="l">Minutes personal</div></div>
+  <div class="stat bad"><div class="v">{{ totals.unstated|default:0 }}</div><div class="l">Purpose not stated</div></div>
+</div>
+
+{% if out_now %}<div class="msg warning"><b>{{ out_now }}</b> trip{{ out_now|pluralize }} in this range never got a return punch.</div>{% endif %}
+
+<div class="grid g-side">
+  <div class="card"><div class="hd"><h2>Every trip</h2>
+    <span class="right tiny muted">showing up to 400</span></div>
+    <div class="bd flush"><div class="table-wrap"><table>
+    <thead><tr><th>Date</th><th>Employee</th><th>Out</th><th>Back</th><th>For</th>
+      <th>Purpose</th><th>Where / why</th><th></th></tr></thead>
+    <tbody>{% for o in outings %}<tr>
+      <td class="mono small">{{ o.date|date:"d M" }}</td>
+      <td><div class="emp"><div class="avatar">{{ o.employee.initials }}</div><div>
+        <b>{{ o.employee.display_name }}</b><span>{{ o.employee.employee_id }}</span></div></div></td>
+      <td class="mono">{{ o.left_at|time:"h:i A" }}</td>
+      <td class="mono">{% if o.returned_at %}{{ o.returned_at|time:"h:i A" }}{% else %}<span style="color:var(--late)">—</span>{% endif %}</td>
+      <td class="mono small">{{ o.duration_display }}</td>
+      <td><span class="badge {{ o.badge_class }}">{{ o.get_purpose_display }}</span>
+        {% if not o.counts_as_work %}<div class="tiny" style="color:var(--bad)">unpaid</div>{% endif %}</td>
+      <td class="small">{% if o.destination %}<b>{{ o.destination }}</b>{% endif %}
+        {% if o.note %}<div class="tiny muted">{{ o.note|truncatechars:60 }}</div>{% endif %}
+        {% if o.needs_explanation %}<span class="tiny muted">not stated</span>{% endif %}</td>
+      <td><a class="tiny" href="{% url 'attendance:outing_edit' o.pk %}?next={{ request.get_full_path|urlencode }}">edit</a></td>
+    </tr>{% empty %}<tr><td colspan="8"><div class="empty"><b>No trips in this range</b>
+      Trips appear once an employee punches out and back in during the day.</div></td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </div>
+
+  <div class="card" style="align-self:start"><div class="hd"><h3>By employee</h3></div>
+    <div class="bd flush"><table>
+    <thead><tr><th>Employee</th><th>Trips</th><th>Min</th><th>?</th></tr></thead>
+    <tbody>{% for r in per_employee %}<tr>
+      <td class="small"><b>{{ r.employee__first_name }} {{ r.employee__last_name }}</b>
+        <div class="tiny muted">{{ r.official }} official · {{ r.personal }} personal</div></td>
+      <td class="mono">{{ r.trips }}</td>
+      <td class="mono">{{ r.total_minutes|default:0 }}</td>
+      <td>{% if r.unstated %}<span class="badge bad">{{ r.unstated }}</span>{% else %}<span class="tiny muted">—</span>{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="4"><div class="empty">No data</div></td></tr>{% endfor %}
+    </tbody></table></div>
+  </div>
+</div>
+{% endblock %}

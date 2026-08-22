@@ -9,8 +9,8 @@ from django.db.models import Q
 from apps.accounts.models import Shift, User
 from apps.leaves.models import LeaveRequest
 
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, PunchLog
-from .rules import evaluate_day, pick_in_out
+from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
+from .rules import build_segments, evaluate_day
 
 
 def match_employee(card_no: str = "", device_user_id: str = "") -> User | None:
@@ -65,19 +65,26 @@ def rebuild_day(employee: User, day: date_cls) -> DailyAttendance | None:
         employee=employee, date=day, status=HomeOfficeEntry.Status.APPROVED
     ).first()
 
+    segments = None
     if home:
         mode = DailyAttendance.Mode.HOME
         check_in, check_out = home.check_in, home.check_out
         punch_count = int(bool(check_in)) + int(bool(check_out))
+        Outing.objects.filter(employee=employee, date=day).delete()
+        paid_out = unpaid_out = trip_count = 0
+        inside = None
     else:
         mode = DailyAttendance.Mode.OFFICE
-        times = list(
-            PunchLog.objects.filter(
-                employee=employee, punch_time__date=day
-            ).order_by("punch_time").values_list("punch_time", flat=True)
+        punches = list(
+            PunchLog.objects.filter(employee=employee, punch_time__date=day)
+            .order_by("punch_time")
         )
-        punch_count = len(times)
-        check_in, check_out = pick_in_out(times, shift)
+        punch_count = len(punches)
+        segments = build_segments([p.punch_time for p in punches], shift)
+        check_in, check_out = segments.check_in, segments.check_out
+        _label_punches(punches, segments)
+        paid_out, unpaid_out, trip_count = _sync_outings(employee, day, record, segments, punches)
+        inside = segments.inside_minutes if punches else None
 
     is_holiday = Holiday.objects.filter(date=day).exists()
     is_on_leave = LeaveRequest.objects.filter(
@@ -88,6 +95,10 @@ def rebuild_day(employee: User, day: date_cls) -> DailyAttendance | None:
     ev = evaluate_day(
         shift, day, check_in, check_out,
         mode=mode, is_holiday=is_holiday, is_on_leave=is_on_leave, punch_count=punch_count,
+        inside_minutes=inside,
+        outside_paid_minutes=paid_out,
+        outside_unpaid_minutes=unpaid_out,
+        trip_count=trip_count,
     )
 
     record.shift = shift
@@ -102,6 +113,11 @@ def rebuild_day(employee: User, day: date_cls) -> DailyAttendance | None:
     record.check_out = ev.check_out
     record.required_out = ev.required_out
     record.worked_minutes = ev.worked_minutes
+    record.inside_minutes = ev.inside_minutes
+    record.outside_minutes = ev.outside_minutes
+    record.outside_paid_minutes = ev.outside_paid_minutes
+    record.outside_unpaid_minutes = ev.outside_unpaid_minutes
+    record.trip_count = ev.trip_count
     record.late_minutes = ev.late_minutes
     record.early_out_minutes = ev.early_out_minutes
     record.overtime_minutes = ev.overtime_minutes
@@ -112,7 +128,63 @@ def rebuild_day(employee: User, day: date_cls) -> DailyAttendance | None:
     record.punch_count = punch_count
     record.remarks = ev.remark_text
     record.save()
+    Outing.objects.filter(employee=employee, date=day).update(day=record)
     return record
+
+
+def _label_punches(punches, segments) -> None:
+    """Mark each punch of the day as IN or OUT, and flag duplicate taps."""
+    ignored = set(segments.ignored)
+    order = {t: i for i, t in enumerate(segments.punches)}
+    for punch in punches:
+        if punch.punch_time in ignored:
+            direction, sequence, is_ignored = PunchLog.Direction.UNKNOWN, 0, True
+        else:
+            index = order.get(punch.punch_time, -1)
+            direction = PunchLog.Direction.IN if index % 2 == 0 else PunchLog.Direction.OUT
+            sequence, is_ignored = index + 1, False
+        if (punch.direction, punch.sequence, punch.is_ignored) != (direction, sequence, is_ignored):
+            punch.direction = direction
+            punch.sequence = sequence
+            punch.is_ignored = is_ignored
+            punch.save(update_fields=["direction", "sequence", "is_ignored"])
+
+
+def _sync_outings(employee, day, record, segments, punches):
+    """Create or refresh an Outing for every trip out of the office.
+
+    Matching is done on the time the employee left, so any purpose or note
+    they already wrote survives a recalculation.
+    """
+    by_time = {p.punch_time: p for p in punches}
+    seen = []
+    paid = unpaid = 0
+
+    for left_at, returned_at in segments.trips:
+        outing, _ = Outing.objects.get_or_create(
+            employee=employee, left_at=left_at,
+            defaults={"date": day, "day": record},
+        )
+        outing.date = day
+        outing.day = record
+        outing.returned_at = returned_at
+        outing.out_punch = by_time.get(left_at)
+        outing.in_punch = by_time.get(returned_at)
+        outing.save()
+        seen.append(outing.pk)
+        if outing.counts_as_work:
+            paid += outing.minutes
+        else:
+            unpaid += outing.minutes
+
+    # A trip that no longer exists (a punch was deleted or corrected) goes away.
+    Outing.objects.filter(employee=employee, date=day).exclude(pk__in=seen).delete()
+    return paid, unpaid, len(seen)
+
+
+def recalc_for_outing(outing) -> None:
+    """Called after an employee labels a trip - the day's totals change."""
+    rebuild_day(outing.employee, outing.date)
 
 
 def rebuild_range(day_from: date_cls, day_to: date_cls, employees=None) -> int:

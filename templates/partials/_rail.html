@@ -26,6 +26,8 @@
     <a class="nav {% nav_active 'reports:monthly' %}" href="{% url 'reports:monthly' %}">Monthly sheet</a>
     <a class="nav {% nav_active 'reports:employee' %}" href="{% url 'reports:employee' %}">Employee report</a>
     <a class="nav {% nav_active 'reports:late' %}" href="{% url 'reports:late' %}">Late &amp; early out</a>
+    <a class="nav {% nav_active 'reports:outings' 'attendance:outing_edit' %}" href="{% url 'reports:outings' %}">Trips out
+      {% if unexplained_total %}<span class="pill">{{ unexplained_total }}</span>{% endif %}</a>
     <a class="nav {% nav_active 'reports:department' %}" href="{% url 'reports:department' %}">Department summary</a>
 
     <div class="group">Setup</div>
@@ -42,6 +44,8 @@
   <a class="nav {% nav_active 'leaves:my_leaves' %}" href="{% url 'leaves:my_leaves' %}">My leave</a>
   <a class="nav {% nav_active 'leaves:team' %}" href="{% url 'leaves:team' %}">Who's on leave
     {% if out_today_count %}<span class="pill count">{{ out_today_count }}</span>{% endif %}</a>
+  <a class="nav {% nav_active 'attendance:my_outings' %}" href="{% url 'attendance:my_outings' %}">My trips
+    {% if my_unlabelled_trips %}<span class="pill">{{ my_unlabelled_trips }}</span>{% endif %}</a>
   <a class="nav {% nav_active 'attendance:home_office' %}" href="{% url 'attendance:home_office' %}">Home office</a>
 
   <div class="who">

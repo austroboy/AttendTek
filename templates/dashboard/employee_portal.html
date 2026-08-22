@@ -15,7 +15,8 @@
           <div><div class="eyebrow">In</div><div class="mono" style="font-size:19px">{{ record.check_in|time:"h:i A"|default:"— : —" }}</div></div>
           <div><div class="eyebrow">Required out</div><div class="mono" style="font-size:19px;color:var(--bad)">{{ record.required_out|time:"h:i A"|default:"— : —" }}</div></div>
           <div><div class="eyebrow">Out</div><div class="mono" style="font-size:19px">{{ record.check_out|time:"h:i A"|default:"— : —" }}</div></div>
-          <div><div class="eyebrow">Worked</div><div class="mono" style="font-size:19px">{{ record.worked_display }}</div></div>
+          <div><div class="eyebrow">Worked</div><div class="mono" style="font-size:19px">{{ record.worked_display }}</div>
+            {% if record.outside_minutes %}<div class="tiny muted">{{ record.inside_display }} inside · {{ record.outside_minutes }}m out</div>{% endif %}</div>
         </div>
         {% include "partials/_tape.html" %}
         <div class="row tiny muted" style="margin-top:8px">
@@ -26,6 +27,28 @@
         {% if record.remarks %}<div class="msg {% if record.is_late %}warning{% else %}info{% endif %}" style="margin-top:12px">{{ record.remarks }}</div>{% endif %}
         {% if record.is_early_out %}<div class="msg error" style="margin-top:8px">
           Required out ({{ record.required_out|time:"h:i A" }})  — you left {{ record.early_out_minutes }} minutes early.</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Today's trips out</h2>
+        <a class="right tiny" href="{% url 'attendance:my_outings' %}">All trips →</a></div>
+      <div class="bd">
+        {% for o in todays_outings %}
+          <div class="kv">
+            <span class="mono">{{ o.left_at|time:"h:i A" }} → {% if o.returned_at %}{{ o.returned_at|time:"h:i A" }}{% else %}<span style="color:var(--late)">still out</span>{% endif %}
+              {% if o.destination %}<span class="tiny muted"> · {{ o.destination }}</span>{% endif %}</span>
+            <span><span class="badge {{ o.badge_class }}">{{ o.get_purpose_display }}</span>
+              <b class="small">{{ o.duration_display }}</b></span>
+          </div>
+        {% empty %}
+          <div class="tiny muted">You have not left the office today. Every time you tap out and
+            back in during the day, the trip shows up here so you can say what it was for.</div>
+        {% endfor %}
+        {% if unlabelled_trips %}
+          <a class="btn sm" style="margin-top:10px" href="{% url 'attendance:my_outings' %}">
+            {{ unlabelled_trips }} trip{{ unlabelled_trips|pluralize }} need a purpose</a>
+        {% endif %}
       </div>
     </div>
 

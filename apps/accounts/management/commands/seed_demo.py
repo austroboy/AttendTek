@@ -100,6 +100,16 @@ class Command(BaseCommand):
                                                           random.randint(0, 55)))
                     record_punch(employee=emp, punch_time=in_dt, card_no=emp.rfid_card_no,
                                  device_user_id=emp.device_user_id)
+
+                    # Some people step out during the day - a client, the bank, lunch.
+                    for _ in range(random.choice([0, 0, 0, 1, 1, 2])):
+                        left = in_dt + timedelta(minutes=random.randint(90, 400))
+                        back = left + timedelta(minutes=random.choice([25, 40, 55, 75, 110]))
+                        record_punch(employee=emp, punch_time=left, card_no=emp.rfid_card_no,
+                                     device_user_id=emp.device_user_id)
+                        record_punch(employee=emp, punch_time=back, card_no=emp.rfid_card_no,
+                                     device_user_id=emp.device_user_id)
+
                     required = max(datetime.combine(day, shift.end_time), in_dt + timedelta(hours=9))
                     delta = random.choice([-75, -20, 3, 8, 25, 60])
                     out_dt = required + timedelta(minutes=delta)
@@ -122,6 +132,25 @@ class Command(BaseCommand):
                 end_date=today + timedelta(days=4), defaults={"reason": "Family event"},
             )
 
+        rebuild_range(start, today)
+
+        # Label most of the trips, leaving a few for the admin to chase.
+        from apps.attendance.models import Outing
+        places = ["Client office, Gulshan", "Bank", "Courier pickup", "Vendor meeting",
+                  "Head office", "Lunch"]
+        reasons = ["Contract signing", "Cheque deposit", "Collected the parcel",
+                   "Quotation discussion", "Monthly review", ""]
+        for outing in Outing.objects.all():
+            roll = random.random()
+            if roll < 0.15:
+                continue                      # left unstated on purpose
+            i = random.randrange(len(places))
+            outing.purpose = (Outing.Purpose.PERSONAL if roll < 0.3
+                              else Outing.Purpose.BREAK if roll < 0.4
+                              else Outing.Purpose.OFFICIAL)
+            outing.destination = places[i]
+            outing.note = reasons[i]
+            outing.save()
         rebuild_range(start, today)
         self.stdout.write(self.style.SUCCESS(
             "Demo data created.\n"

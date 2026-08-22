@@ -22,6 +22,11 @@ class Holiday(models.Model):
 class PunchLog(models.Model):
     """Raw punches coming from the device. DailyAttendance is built from these."""
 
+    class Direction(models.TextChoices):
+        IN = "IN", "In"
+        OUT = "OUT", "Out"
+        UNKNOWN = "UNKNOWN", "Not paired yet"
+
     class Source(models.TextChoices):
         DEVICE = "DEVICE", "ZKTeco device"
         MANUAL = "MANUAL", "Manual entry"
@@ -39,6 +44,16 @@ class PunchLog(models.Model):
     card_no = models.CharField(max_length=32, blank=True)
     device_user_id = models.CharField(max_length=16, blank=True)
     source = models.CharField(max_length=10, choices=Source.choices, default=Source.DEVICE)
+    direction = models.CharField(
+        max_length=8, choices=Direction.choices, default=Direction.UNKNOWN,
+        help_text="Odd punches of the day are IN, even punches are OUT",
+    )
+    sequence = models.PositiveSmallIntegerField(
+        default=0, help_text="Position of this punch within the day, starting at 1"
+    )
+    is_ignored = models.BooleanField(
+        default=False, help_text="A duplicate tap - not counted when pairing the day"
+    )
     raw_status = models.SmallIntegerField(default=0)
     is_matched = models.BooleanField(default=True, help_text="Whether the punch was matched to an employee")
     note = models.CharField(max_length=160, blank=True)
@@ -99,6 +114,21 @@ class DailyAttendance(models.Model):
     )
 
     worked_minutes = models.PositiveIntegerField(default=0)
+    inside_minutes = models.PositiveIntegerField(
+        default=0, help_text="Time actually inside the office"
+    )
+    outside_minutes = models.PositiveIntegerField(
+        default=0, help_text="Total time spent out of the office during the day"
+    )
+    outside_paid_minutes = models.PositiveIntegerField(
+        default=0, help_text="Of that, time out on office work"
+    )
+    outside_unpaid_minutes = models.PositiveIntegerField(
+        default=0, help_text="Of that, personal time - it pushes the required out time back"
+    )
+    trip_count = models.PositiveSmallIntegerField(
+        default=0, help_text="How many times the employee left and came back"
+    )
     late_minutes = models.PositiveIntegerField(default=0)
     early_out_minutes = models.PositiveIntegerField(default=0)
     overtime_minutes = models.PositiveIntegerField(default=0)
@@ -127,9 +157,25 @@ class DailyAttendance(models.Model):
         return f"{self.employee.display_name} - {self.date:%d %b %Y} - {self.get_status_display()}"
 
     # ---------- display helpers ----------
+    @staticmethod
+    def as_hm(minutes):
+        return f"{minutes // 60}h {minutes % 60:02d}m"
+
     @property
     def worked_display(self):
-        return f"{self.worked_minutes // 60}h {self.worked_minutes % 60:02d}m"
+        return self.as_hm(self.worked_minutes)
+
+    @property
+    def inside_display(self):
+        return self.as_hm(self.inside_minutes)
+
+    @property
+    def outside_display(self):
+        return self.as_hm(self.outside_minutes)
+
+    @property
+    def has_unexplained_trip(self):
+        return self.outings.filter(purpose=Outing.Purpose.UNSPECIFIED).exists()
 
     @property
     def shortfall_display(self):
@@ -229,3 +275,98 @@ class HomeOfficeEntry(models.Model):
     @property
     def badge_class(self):
         return {"PENDING": "warn", "APPROVED": "ok", "REJECTED": "bad"}[self.status]
+
+
+class Outing(models.Model):
+    """One trip out of the office and back, built from a pair of punches.
+
+    Employees leave during the day - to a client, the bank, a delivery - and
+    tap the reader on the way out and again on the way back. Each of those
+    gaps becomes an Outing the employee can label, so the day is not just a
+    single in/out but a record of where the time actually went.
+    """
+
+    class Purpose(models.TextChoices):
+        OFFICIAL = "OFFICIAL", "Official work"
+        PERSONAL = "PERSONAL", "Personal"
+        BREAK = "BREAK", "Break / meal"
+        UNSPECIFIED = "UNSPECIFIED", "Not stated yet"
+
+    # Purposes that still count towards the day's working hours.
+    PAID_PURPOSES = (Purpose.OFFICIAL, Purpose.UNSPECIFIED)
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="outings"
+    )
+    day = models.ForeignKey(
+        DailyAttendance, null=True, blank=True,
+        on_delete=models.CASCADE, related_name="outings",
+    )
+    date = models.DateField()
+    left_at = models.DateTimeField()
+    returned_at = models.DateTimeField(null=True, blank=True)
+    minutes = models.PositiveIntegerField(default=0)
+
+    out_punch = models.ForeignKey(
+        PunchLog, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    in_punch = models.ForeignKey(
+        PunchLog, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+
+    purpose = models.CharField(
+        max_length=12, choices=Purpose.choices, default=Purpose.UNSPECIFIED
+    )
+    destination = models.CharField(
+        max_length=120, blank=True, help_text="Where did you go?"
+    )
+    note = models.TextField(blank=True, help_text="What was it for?")
+
+    counts_as_work = models.BooleanField(
+        default=True, help_text="Whether this time counts towards the working hours"
+    )
+    is_admin_adjusted = models.BooleanField(
+        default=False, help_text="An admin set counts_as_work by hand"
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-date", "left_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["employee", "left_at"], name="uniq_outing_start")
+        ]
+        indexes = [models.Index(fields=["date", "purpose"])]
+
+    def __str__(self):
+        return f"{self.employee.display_name} out at {self.left_at:%d %b %I:%M %p}"
+
+    def save(self, *args, **kwargs):
+        if self.returned_at and self.left_at:
+            self.minutes = max(0, int((self.returned_at - self.left_at).total_seconds() // 60))
+        if not self.is_admin_adjusted:
+            self.counts_as_work = self.purpose in self.PAID_PURPOSES
+        super().save(*args, **kwargs)
+
+    @property
+    def is_open(self):
+        """Still out - no return punch yet."""
+        return self.returned_at is None
+
+    @property
+    def duration_display(self):
+        if self.is_open:
+            return "still out"
+        return f"{self.minutes // 60}h {self.minutes % 60:02d}m" if self.minutes >= 60 else f"{self.minutes}m"
+
+    @property
+    def badge_class(self):
+        return {
+            self.Purpose.OFFICIAL: "ok",
+            self.Purpose.PERSONAL: "warn",
+            self.Purpose.BREAK: "info",
+            self.Purpose.UNSPECIFIED: "muted",
+        }[self.purpose]
+
+    @property
+    def needs_explanation(self):
+        return self.purpose == self.Purpose.UNSPECIFIED
