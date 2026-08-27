@@ -24,7 +24,7 @@
     {% endfor %}</tbody></table></div></div>
 
   <div class="card"><div class="hd"><h2>Recent tasks</h2></div><div class="bd">
-    {% for t in recent_tasks %}<div class="kv"><span>{{ t.date|date:"d M" }} · {{ t.title }}</span><b>{{ t.hours_spent }}h</b></div>
+    {% for t in recent_tasks %}<div class="kv"><span>{{ t.date|date:"d M" }} · {{ t.title }}</span><b>{{ t.duration_display }}</b></div>
     {% empty %}<div class="tiny muted">No tasks yet.</div>{% endfor %}</div></div>
 </div>
 

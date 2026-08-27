@@ -8,15 +8,17 @@
       {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select>
     <button class="btn sm">Show</button></form>
   <a class="btn sm" href="?date={{ next_day|date:'Y-m-d' }}">{{ next_day|date:"d M" }} →</a>
+  <span class="right badge info">{{ day_total }} logged in total</span>
 </div>
 
 <div class="grid g-2">
-  {% for emp, items in by_employee %}
-  <div class="card"><div class="hd"><div class="emp"><div class="avatar">{{ emp.initials }}</div>
-    <div><b>{{ emp.display_name }}</b><span>{{ emp.employee_id }}</span></div></div></div>
-    <div class="bd">{% for t in items %}
+  {% for row in rows %}
+  <div class="card"><div class="hd"><div class="emp"><div class="avatar">{{ row.employee.initials }}</div>
+    <div><b>{{ row.employee.display_name }}</b><span>{{ row.employee.employee_id }}</span></div></div>
+    <span class="right badge muted">{{ row.total }}</span></div>
+    <div class="bd">{% for t in row.tasks %}
       <div class="kv"><span><b>{{ t.title }}</b>{% if t.project %}<span class="tiny muted"> · {{ t.project }}</span>{% endif %}</span>
-        <span><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span> <b>{{ t.hours_spent }}h</b></span></div>
+        <span><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span> <b>{{ t.duration_display }}</b></span></div>
     {% endfor %}</div></div>
   {% empty %}<div class="card"><div class="empty"><b>No tasks submitted on this day</b></div></div>{% endfor %}
 </div>

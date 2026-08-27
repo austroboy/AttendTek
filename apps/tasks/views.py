@@ -27,10 +27,21 @@ def my_tasks(request):
     grouped = {}
     for t in tasks:
         grouped.setdefault(t.date, []).append(t)
+
+    # Each day gets its own total, so the employee can see whether what they
+    # logged lines up with the hours they were actually at work.
+    days = []
+    for day, items in sorted(grouped.items(), reverse=True):
+        minutes = sum(t.minutes_spent for t in items)
+        days.append({"date": day, "tasks": items, "minutes": minutes,
+                     "total": DailyTask.format_minutes(minutes)})
+
+    total = sum(t.minutes_spent for t in tasks)
     return render(request, "tasks/my_tasks.html", {
         "form": form,
-        "grouped": sorted(grouped.items(), reverse=True),
-        "total_hours": sum(float(t.hours_spent) for t in tasks),
+        "days": days,
+        "total_logged": DailyTask.format_minutes(total),
+        "task_count": len(tasks),
     })
 
 
@@ -56,13 +67,20 @@ def task_board(request):
     by_employee = {}
     for t in tasks:
         by_employee.setdefault(t.employee, []).append(t)
+    rows = sorted(
+        ({"employee": emp, "tasks": items,
+          "total": DailyTask.format_minutes(sum(t.minutes_spent for t in items))}
+         for emp, items in by_employee.items()),
+        key=lambda r: r["employee"].employee_id,
+    )
 
     submitted = set(t.employee_id for t in tasks)
     missing = [e for e in User.objects.active_staff() if e.id not in submitted]
 
     return render(request, "tasks/task_board.html", {
         "day": day,
-        "by_employee": sorted(by_employee.items(), key=lambda kv: kv[0].employee_id),
+        "rows": rows,
+        "day_total": DailyTask.format_minutes(sum(t.minutes_spent for t in tasks)),
         "missing": missing,
         "employees": User.objects.active_staff(),
         "emp_id": emp_id,

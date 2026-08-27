@@ -20,7 +20,9 @@ class DailyTask(models.Model):
     title = models.CharField(max_length=160)
     details = models.TextField(blank=True)
     project = models.CharField(max_length=80, blank=True)
-    hours_spent = models.DecimalField(max_digits=4, decimal_places=2, default=1)
+    minutes_spent = models.PositiveIntegerField(
+        default=60, help_text="How long the task took, stored in minutes"
+    )
     progress = models.CharField(max_length=12, choices=Progress.choices, default=Progress.DONE)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -33,3 +35,28 @@ class DailyTask(models.Model):
     @property
     def badge_class(self):
         return {"DONE": "ok", "IN_PROGRESS": "info", "BLOCKED": "bad"}[self.progress]
+
+    @property
+    def hours(self):
+        return self.minutes_spent // 60
+
+    @property
+    def minutes(self):
+        return self.minutes_spent % 60
+
+    @property
+    def duration_display(self):
+        """1h 05m, or just 45m for anything under an hour."""
+        if self.minutes_spent < 60:
+            return f"{self.minutes_spent}m"
+        if self.minutes:
+            return f"{self.hours}h {self.minutes:02d}m"
+        return f"{self.hours}h"
+
+    @staticmethod
+    def format_minutes(total):
+        total = int(total or 0)
+        if total < 60:
+            return f"{total}m"
+        h, m = divmod(total, 60)
+        return f"{h}h {m:02d}m" if m else f"{h}h"

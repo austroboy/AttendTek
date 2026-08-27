@@ -119,7 +119,7 @@ class Command(BaseCommand):
                     if random.random() < 0.7:
                         DailyTask.objects.get_or_create(
                             employee=emp, date=day, title=random.choice(TASKS),
-                            defaults=dict(hours_spent=random.choice([2, 3, 4, 6, 8]),
+                            defaults=dict(minutes_spent=random.choice([45, 90, 120, 195, 240, 480]),
                                           project=random.choice(["Internal", "Client-A", "Client-B"])),
                         )
             day += timedelta(days=1)
