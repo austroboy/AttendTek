@@ -67,7 +67,7 @@
     </div>
 
     <div class="card">
-      <div class="hd"><h2>What did you work on today?</h2><span class="right tiny muted">Log this every day</span></div>
+      <div class="hd"><h2>What did you work on today?</h2><a class="right tiny" href="{% url 'tasks:my_report' %}">My task report →</a></div>
       <div class="bd">
         <form method="post">{% csrf_token %}
           <input type="hidden" name="form" value="task">

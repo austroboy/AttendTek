@@ -16,6 +16,8 @@ from apps.accounts.permissions import manager_required
 from apps.attendance.models import DailyAttendance, Outing
 from apps.attendance.services import month_summary
 from apps.tasks.models import DailyTask
+from apps.tasks.services import (PERIODS, employee_rows, period_bounds,
+                                 shift_period, summarise)
 
 S = DailyAttendance.Status
 
@@ -299,5 +301,107 @@ def export_outings_csv(request):
             o.returned_at.strftime("%I:%M %p") if o.returned_at else "still out",
             o.minutes, o.get_purpose_display(), "Yes" if o.counts_as_work else "No",
             o.destination, o.note,
+        ])
+    return response
+
+
+@manager_required
+def task_report(request):
+    """The whole team's task log, for a day, a week, a month or any range.
+
+    Three questions get answered on one page: how much was logged, who has not
+    logged anything, and how the logged time compares with the hours those
+    people were actually at work.
+    """
+    kind = request.GET.get("period", "week")
+    if kind not in dict(PERIODS):
+        kind = "week"
+
+    try:
+        anchor = datetime.strptime(request.GET.get("date"), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        anchor = app_today()
+
+    custom_from = request.GET.get("from")
+    custom_to = request.GET.get("to")
+    if custom_from and custom_to:
+        try:
+            start = datetime.strptime(custom_from, "%Y-%m-%d").date()
+            end = datetime.strptime(custom_to, "%Y-%m-%d").date()
+            label = f"{start:%d %b} – {end:%d %b %Y}"
+            kind = "custom"
+        except ValueError:
+            start, end, label = period_bounds("week", anchor)
+    else:
+        start, end, label = period_bounds(kind, anchor)
+
+    dept = request.GET.get("dept", "")
+    emp_id = request.GET.get("employee", "")
+    project = request.GET.get("project", "")
+
+    employees = User.objects.active_staff().select_related("department")
+    if dept:
+        employees = employees.filter(department_id=dept)
+    if emp_id:
+        employees = employees.filter(pk=emp_id)
+
+    tasks = (DailyTask.objects.filter(date__range=(start, end), employee__in=employees)
+             .select_related("employee", "employee__department"))
+    if project:
+        tasks = tasks.filter(project__iexact=project)
+    tasks = tasks.order_by("-date", "employee__employee_id")
+
+    summary = summarise(tasks, start, end)
+    rows = employee_rows(list(employees), start, end)
+    silent = [r for r in rows if r["minutes"] == 0]
+
+    known_projects = (DailyTask.objects.exclude(project="")
+                      .values_list("project", flat=True).distinct().order_by("project"))
+
+    working_days = sum(1 for d in summary["days"] if d["is_logged"]) or 1
+
+    return render(request, "reports/task_report.html", {
+        "kind": kind, "periods": PERIODS,
+        "start": start, "end": end, "label": label, "anchor": anchor,
+        "prev": shift_period(kind, anchor, -1) if kind != "custom" else anchor,
+        "next": shift_period(kind, anchor, 1) if kind != "custom" else anchor,
+        "summary": summary,
+        "rows": rows,
+        "silent": silent,
+        "reporting_count": len(rows) - len(silent),
+        "team_size": len(rows),
+        "avg_per_person": DailyTask.format_minutes(
+            round(summary["total_minutes"] / len(rows)) if rows else 0),
+        "avg_per_day": DailyTask.format_minutes(round(summary["total_minutes"] / working_days)),
+        "departments": Department.objects.all(),
+        "employees": User.objects.active_staff(),
+        "projects": known_projects,
+        "dept": dept, "emp_id": emp_id, "project": project,
+        "custom_from": custom_from or "", "custom_to": custom_to or "",
+    })
+
+
+@manager_required
+def export_tasks_csv(request):
+    """Every task entry in the range, for a spreadsheet or payroll review."""
+    try:
+        start = datetime.strptime(request.GET.get("from"), "%Y-%m-%d").date()
+        end = datetime.strptime(request.GET.get("to"), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        start, end, _ = period_bounds(request.GET.get("period", "week"), app_today())
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="tasks-{start}-to-{end}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["Date", "Employee ID", "Name", "Department", "Task", "Project",
+                     "Hours", "Minutes", "Total minutes", "Progress", "Details"])
+    for t in (DailyTask.objects.filter(date__range=(start, end))
+              .select_related("employee", "employee__department")
+              .order_by("date", "employee__employee_id")):
+        writer.writerow([
+            t.date.strftime("%Y-%m-%d"), t.employee.employee_id, t.employee.display_name,
+            t.employee.department.name if t.employee.department else "",
+            t.title, t.project, t.hours, t.minutes, t.minutes_spent,
+            t.get_progress_display(), t.details,
         ])
     return response

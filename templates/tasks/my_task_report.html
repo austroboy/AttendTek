@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}My task report{% endblock %}
+{% block eyebrow %}My portal · {{ kind|title }}{% endblock %}
+{% block heading %}{{ label }}{% endblock %}
+
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  {% for value, name in periods %}
+    <a class="btn sm {% if kind == value %}dark{% endif %}"
+       href="?period={{ value }}&date={{ anchor|date:'Y-m-d' }}">{{ name }}</a>
+  {% endfor %}
+  <a class="btn sm" href="?period={{ kind }}&date={{ prev|date:'Y-m-d' }}">← Previous</a>
+  <a class="btn sm" href="?period={{ kind }}&date={{ next|date:'Y-m-d' }}">Next →</a>
+  <a class="btn sm right" href="{% url 'tasks:my_tasks' %}">Log a task</a>
+</div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat accent"><div class="v">{{ summary.total_display }}</div><div class="l">Logged</div></div>
+  <div class="stat info"><div class="v">{{ summary.task_count }}</div><div class="l">Tasks</div></div>
+  <div class="stat ok"><div class="v">{{ summary.daily_average }}</div><div class="l">Average per logged day</div></div>
+  <div class="stat {{ coverage.level }}"><div class="v">{{ coverage.percent }}%</div><div class="l">Of time at work</div></div>
+</div>
+
+<div class="grid g-side">
+  <div class="stack">
+    {% if show_days %}
+    <div class="card"><div class="hd"><h2>Day by day</h2>
+      <span class="right tiny muted">{{ summary.logged_days }} of {{ summary.days|length }} days logged</span></div>
+      <div class="bd">
+        <div class="bars" style="height:130px">
+          {% for d in summary.days %}
+            <div class="col" title="{{ d.date|date:'D d M' }} — {{ d.display }}">
+              {% if summary.peak_minutes %}{% widthratio d.minutes summary.peak_minutes 100 as h %}{% else %}{% with h=0 %}{% endwith %}{% endif %}
+              <div class="seg" style="background:{% if d.is_logged %}var(--accent){% else %}var(--line){% endif %};height:{{ h|default:2 }}%"></div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="row" style="gap:8px">
+          {% for d in summary.days %}<div class="lbl" style="flex:1;text-align:center">{{ d.date|date:"j" }}</div>{% endfor %}
+        </div>
+        <div class="sep"></div>
+        <table><tbody>
+          {% for d in summary.days %}
+            {% if d.is_logged %}
+            <tr><td class="mono small">{{ d.date|date:"D, d M" }}</td>
+              <td><div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden">
+                {% widthratio d.minutes summary.peak_minutes 100 as w %}
+                <div style="height:100%;width:{{ w }}%;background:var(--accent)"></div></div></td>
+              <td class="mono small" style="width:80px;text-align:right"><b>{{ d.display }}</b></td></tr>
+            {% endif %}
+          {% endfor %}
+        </tbody></table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card"><div class="hd"><h2>Every task in this {{ kind }}</h2></div>
+      <div class="bd flush"><div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Task</th><th>Project</th><th>Time</th><th>Progress</th></tr></thead>
+        <tbody>{% for t in summary.tasks %}<tr>
+          <td class="mono small">{{ t.date|date:"d M" }}</td>
+          <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details|truncatechars:70 }}</div>{% endif %}</td>
+          <td class="small">{{ t.project|default:"—" }}</td>
+          <td class="mono small">{{ t.duration_display }}</td>
+          <td><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span></td>
+        </tr>{% empty %}
+          <tr><td colspan="5"><div class="empty"><b>Nothing logged in this {{ kind }}</b>
+            Log what you worked on and it will show up here.</div></td></tr>
+        {% endfor %}</tbody>
+      </table></div></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>Logged vs time at work</h3></div><div class="bd">
+      <div style="height:8px;background:var(--muted-soft);border-radius:4px;overflow:hidden;margin-bottom:12px">
+        <div style="height:100%;width:{{ coverage.bar }}%;background:var(--{{ coverage.level }}{% if coverage.level == 'ok' %}{% endif %})"></div>
+      </div>
+      <div class="kv"><span>At work</span><b>{{ coverage.worked_display }}</b></div>
+      <div class="kv"><span>Logged in tasks</span><b>{{ coverage.logged_display }}</b></div>
+      <div class="kv"><span>Not accounted for</span><b>{{ coverage.gap_display }}</b></div>
+      <p class="tiny muted" style="margin-top:10px">Meetings, interruptions and admin work rarely
+        make it into a task log, so this is never 100%. It is here to help you notice a week
+        where the log slipped, not to grade you.</p>
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>By project</h3></div><div class="bd">
+      {% for p in summary.projects %}
+        <div style="margin-bottom:10px">
+          <div class="row" style="margin-bottom:4px"><span class="small">{{ p.name }}</span>
+            <b class="right mono small">{{ p.display }}</b></div>
+          <div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:{{ p.share }}%;background:var(--accent)"></div></div>
+        </div>
+      {% empty %}<div class="tiny muted">No projects logged.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>By progress</h3></div><div class="bd">
+      {% for p in summary.progress %}
+        <div class="kv"><span>{{ p.name }}</span><b>{{ p.display }}</b></div>
+      {% empty %}<div class="tiny muted">Nothing logged.</div>{% endfor %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

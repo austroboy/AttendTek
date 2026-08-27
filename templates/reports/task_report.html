@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Task report{% endblock %}
+{% block eyebrow %}Reports · {{ kind|title }}{% endblock %}
+{% block heading %}{{ label }}{% endblock %}
+
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  {% for value, name in periods %}
+    <a class="btn sm {% if kind == value %}dark{% endif %}"
+       href="?period={{ value }}&date={{ anchor|date:'Y-m-d' }}&dept={{ dept }}&employee={{ emp_id }}">{{ name }}</a>
+  {% endfor %}
+  {% if kind != 'custom' %}
+    <a class="btn sm" href="?period={{ kind }}&date={{ prev|date:'Y-m-d' }}&dept={{ dept }}&employee={{ emp_id }}">← Previous</a>
+    <a class="btn sm" href="?period={{ kind }}&date={{ next|date:'Y-m-d' }}&dept={{ dept }}&employee={{ emp_id }}">Next →</a>
+  {% endif %}
+  <a class="btn right" href="{% url 'reports:export_tasks' %}?from={{ start|date:'Y-m-d' }}&to={{ end|date:'Y-m-d' }}">CSV</a>
+</div>
+
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <div class="fgroup"><label>From</label><input class="field" type="date" name="from" value="{{ custom_from|default:start|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>To</label><input class="field" type="date" name="to" value="{{ custom_to|default:end|date:'Y-m-d' }}"></div>
+  <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
+    {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Employee</label><select class="field" name="employee"><option value="">All</option>
+    {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select></div>
+  <div class="fgroup"><label>Project</label><select class="field" name="project"><option value="">All</option>
+    {% for p in projects %}<option value="{{ p }}" {% if project == p %}selected{% endif %}>{{ p }}</option>{% endfor %}</select></div>
+  <button class="btn primary">Apply</button>
+</form></div></div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat accent"><div class="v">{{ summary.total_display }}</div><div class="l">Logged by the team</div></div>
+  <div class="stat info"><div class="v">{{ summary.task_count }}</div><div class="l">Task entries</div></div>
+  <div class="stat ok"><div class="v">{{ reporting_count }}/{{ team_size }}</div><div class="l">People who logged</div></div>
+  <div class="stat late"><div class="v">{{ avg_per_person }}</div><div class="l">Average per person</div></div>
+</div>
+
+{% if silent %}
+<div class="msg warning"><b>{{ silent|length }} of {{ team_size }} logged nothing in this period:</b>
+  {% for r in silent %}{{ r.employee.display_name }}{% if not forloop.last %}, {% endif %}{% endfor %}
+</div>
+{% endif %}
+
+<div class="grid g-side">
+  <div class="stack">
+    <div class="card"><div class="hd"><h2>By employee</h2>
+      <span class="right tiny muted">sorted by time logged</span></div>
+      <div class="bd flush"><div class="table-wrap"><table>
+        <thead><tr><th>Employee</th><th>Tasks</th><th>Days</th><th>Logged</th>
+          <th>At work</th><th style="width:150px">Accounted for</th></tr></thead>
+        <tbody>{% for r in rows %}<tr>
+          <td><div class="emp"><div class="avatar">{{ r.employee.initials }}</div><div>
+            <b>{{ r.employee.display_name }}</b>
+            <span>{{ r.employee.department|default:r.employee.employee_id }}</span></div></div></td>
+          <td class="mono small">{{ r.tasks }}</td>
+          <td class="mono small">{{ r.days_logged }}</td>
+          <td class="mono"><b>{{ r.display }}</b></td>
+          <td class="mono small">{{ r.coverage.worked_display }}</td>
+          <td>
+            <div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden;margin-bottom:3px">
+              <div style="height:100%;width:{{ r.coverage.bar }}%;background:var(--{{ r.coverage.level }})"></div></div>
+            <span class="tiny muted">{{ r.coverage.percent }}%{% if r.coverage.gap_display != '0m' %} · {{ r.coverage.gap_display }} unlogged{% endif %}</span>
+          </td>
+        </tr>{% empty %}
+          <tr><td colspan="6"><div class="empty"><b>No employees match these filters</b></div></td></tr>
+        {% endfor %}</tbody>
+      </table></div></div>
+    </div>
+
+    <div class="card"><div class="hd"><h2>Day by day</h2>
+      <span class="right tiny muted">{{ avg_per_day }} on an average working day</span></div>
+      <div class="bd">
+        <div class="bars" style="height:120px">
+          {% for d in summary.days %}
+            <div class="col" title="{{ d.date|date:'D d M' }} — {{ d.display }}">
+              {% widthratio d.minutes summary.peak_minutes 100 as h %}
+              <div class="seg" style="background:{% if d.is_logged %}var(--accent){% else %}var(--line){% endif %};height:{{ h|default:2 }}%"></div>
+            </div>
+          {% endfor %}
+        </div>
+        <div class="row" style="gap:8px">
+          {% for d in summary.days %}<div class="lbl" style="flex:1;text-align:center">{{ d.date|date:"j" }}</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="card"><div class="hd"><h2>Task entries</h2>
+      <span class="right tiny muted">newest first</span></div>
+      <div class="bd flush"><div class="table-wrap"><table>
+        <thead><tr><th>Date</th><th>Employee</th><th>Task</th><th>Project</th><th>Time</th><th>Progress</th></tr></thead>
+        <tbody>{% for t in summary.tasks|slice:":300" %}<tr>
+          <td class="mono small">{{ t.date|date:"d M" }}</td>
+          <td class="small">{{ t.employee.display_name }}</td>
+          <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details|truncatechars:60 }}</div>{% endif %}</td>
+          <td class="small">{{ t.project|default:"—" }}</td>
+          <td class="mono small">{{ t.duration_display }}</td>
+          <td><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span></td>
+        </tr>{% empty %}
+          <tr><td colspan="6"><div class="empty"><b>Nothing logged in this period</b></div></td></tr>
+        {% endfor %}</tbody>
+      </table></div></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>Where the time went</h3></div><div class="bd">
+      {% for p in summary.projects %}
+        <div style="margin-bottom:10px">
+          <div class="row" style="margin-bottom:4px">
+            <span class="small">{{ p.name }}</span>
+            <b class="right mono small">{{ p.display }}</b></div>
+          <div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden">
+            <div style="height:100%;width:{{ p.share }}%;background:var(--accent)"></div></div>
+          <span class="tiny muted">{{ p.share }}% of logged time</span>
+        </div>
+      {% empty %}<div class="tiny muted">No projects logged.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>By progress</h3></div><div class="bd">
+      {% for p in summary.progress %}<div class="kv"><span>{{ p.name }}</span><b>{{ p.display }}</b></div>
+      {% empty %}<div class="tiny muted">Nothing logged.</div>{% endfor %}
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Reading this page</h3></div><div class="bd">
+      <p class="small muted" style="margin-top:0"><b>Accounted for</b> compares logged task time
+        against the hours the person was actually at work. It is never 100% — meetings,
+        interruptions and admin work seldom reach a task log. A number that suddenly drops
+        is worth a conversation; a number below 100 is normal.</p>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

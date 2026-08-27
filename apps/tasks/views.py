@@ -10,6 +10,8 @@ from apps.accounts.permissions import manager_required
 
 from .forms import DailyTaskForm
 from .models import DailyTask
+from .services import (PERIODS, attendance_minutes, coverage, period_bounds,
+                       shift_period, summarise)
 
 
 @login_required
@@ -86,4 +88,32 @@ def task_board(request):
         "emp_id": emp_id,
         "prev_day": day - timedelta(days=1),
         "next_day": day + timedelta(days=1),
+    })
+
+
+@login_required
+def my_task_report(request):
+    """The employee's own log, read back as a day, a week or a month."""
+    from apps.attendance.views import _parse_date
+
+    kind = request.GET.get("period", "week")
+    if kind not in dict(PERIODS):
+        kind = "week"
+    anchor = _parse_date(request.GET.get("date"))
+    start, end, label = period_bounds(kind, anchor)
+
+    tasks = (DailyTask.objects.filter(employee=request.user, date__range=(start, end))
+             .order_by("-date", "-created_at"))
+    summary = summarise(tasks, start, end)
+    worked = attendance_minutes(request.user, start, end)
+
+    return render(request, "tasks/my_task_report.html", {
+        "kind": kind, "periods": PERIODS,
+        "start": start, "end": end, "label": label,
+        "anchor": anchor,
+        "prev": shift_period(kind, anchor, -1),
+        "next": shift_period(kind, anchor, 1),
+        "summary": summary,
+        "coverage": coverage(summary["total_minutes"], worked),
+        "show_days": kind != "day",
     })

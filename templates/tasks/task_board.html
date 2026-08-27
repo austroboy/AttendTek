@@ -9,6 +9,7 @@
     <button class="btn sm">Show</button></form>
   <a class="btn sm" href="?date={{ next_day|date:'Y-m-d' }}">{{ next_day|date:"d M" }} →</a>
   <span class="right badge info">{{ day_total }} logged in total</span>
+  <a class="btn sm" href="{% url 'reports:tasks' %}?period=day&date={{ day|date:'Y-m-d' }}">Full report</a>
 </div>
 
 <div class="grid g-2">

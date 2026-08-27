@@ -53,6 +53,7 @@
   </form>
   <div class="sep"></div>
   <div class="kv"><span>{{ task_count }} task{{ task_count|pluralize }} logged</span><b>{{ total_logged }}</b></div>
+  <a class="btn block" style="margin-top:10px" href="{% url 'tasks:my_report' %}">Day / week / month report</a>
 </div></div></div>
 
 <script src="{% static 'js/task-duration.js' %}"></script>

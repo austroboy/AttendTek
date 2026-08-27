@@ -26,6 +26,7 @@
     <a class="nav {% nav_active 'reports:monthly' %}" href="{% url 'reports:monthly' %}">Monthly sheet</a>
     <a class="nav {% nav_active 'reports:employee' %}" href="{% url 'reports:employee' %}">Employee report</a>
     <a class="nav {% nav_active 'reports:late' %}" href="{% url 'reports:late' %}">Late &amp; early out</a>
+    <a class="nav {% nav_active 'reports:tasks' %}" href="{% url 'reports:tasks' %}">Task report</a>
     <a class="nav {% nav_active 'reports:outings' 'attendance:outing_edit' %}" href="{% url 'reports:outings' %}">Trips out
       {% if unexplained_total %}<span class="pill">{{ unexplained_total }}</span>{% endif %}</a>
     <a class="nav {% nav_active 'reports:department' %}" href="{% url 'reports:department' %}">Department summary</a>
@@ -43,6 +44,7 @@
   <a class="nav {% nav_active 'attendance:self_punch' %}" href="{% url 'attendance:self_punch' %}">Punch in / out</a>
   <a class="nav {% nav_active 'attendance:my_attendance' %}" href="{% url 'attendance:my_attendance' %}">My attendance</a>
   <a class="nav {% nav_active 'tasks:my_tasks' %}" href="{% url 'tasks:my_tasks' %}">My tasks</a>
+  <a class="nav {% nav_active 'tasks:my_report' %}" href="{% url 'tasks:my_report' %}">My task report</a>
   <a class="nav {% nav_active 'leaves:my_leaves' %}" href="{% url 'leaves:my_leaves' %}">My leave</a>
   <a class="nav {% nav_active 'leaves:team' %}" href="{% url 'leaves:team' %}">Who's on leave
     {% if out_today_count %}<span class="pill count">{{ out_today_count }}</span>{% endif %}</a>
