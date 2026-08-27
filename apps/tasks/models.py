@@ -25,6 +25,7 @@ class DailyTask(models.Model):
     )
     progress = models.CharField(max_length=12, choices=Progress.choices, default=Progress.DONE)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-date", "-created_at"]
@@ -52,6 +53,17 @@ class DailyTask(models.Model):
         if self.minutes:
             return f"{self.hours}h {self.minutes:02d}m"
         return f"{self.hours}h"
+
+    @property
+    def was_edited(self):
+        """True once the entry has been changed after it was first logged."""
+        if not (self.created_at and self.updated_at):
+            return False
+        return (self.updated_at - self.created_at).total_seconds() > 60
+
+    @property
+    def is_open(self):
+        return self.progress != self.Progress.DONE
 
     @staticmethod
     def format_minutes(total):

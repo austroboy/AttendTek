@@ -157,3 +157,79 @@ class TaskReportTests(TestCase):
         self.assertEqual(by_name["quiet"]["minutes"], 0)
         self.assertEqual(by_name["sadia"]["minutes"], 690)
         self.assertEqual(rows[0]["employee"].username, "sadia")   # sorted by time logged
+
+
+class TaskEditTests(TestCase):
+    """Changing a task after it was logged."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), is_default=True,
+        )
+        cls.emp = User.objects.create_user(
+            username="imran", password="pw", employee_id="EMP-040", shift=cls.shift)
+        cls.other = User.objects.create_user(
+            username="farhana", password="pw", employee_id="EMP-041", shift=cls.shift)
+        cls.boss = User.objects.create_user(
+            username="boss", password="pw", employee_id="EMP-042",
+            role=User.Role.ADMIN, shift=cls.shift)
+
+    def make_task(self, owner=None, progress="IN_PROGRESS"):
+        return DailyTask.objects.create(
+            employee=owner or self.emp, date=date(2026, 8, 27), title="Invoice module",
+            project="Client-A", minutes_spent=90, progress=progress,
+        )
+
+    def test_owner_can_edit_and_close_a_task(self):
+        task = self.make_task()
+        self.client.force_login(self.emp)
+        response = self.client.post(f"/tasks/me/{task.pk}/edit/", {
+            "date": "2026-08-27", "title": "Invoice module", "project": "Client-A",
+            "progress": "DONE", "details": "Shipped it", "hours": 2, "minutes": 15,
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        task.refresh_from_db()
+        self.assertEqual(task.progress, "DONE")
+        self.assertEqual(task.minutes_spent, 135)
+        self.assertEqual(task.details, "Shipped it")
+
+    def test_one_click_mark_done(self):
+        task = self.make_task()
+        self.client.force_login(self.emp)
+        self.client.post(f"/tasks/me/{task.pk}/progress/DONE/", follow=True)
+        task.refresh_from_db()
+        self.assertEqual(task.progress, "DONE")
+
+    def test_cannot_edit_someone_elses_task(self):
+        task = self.make_task(owner=self.other)
+        self.client.force_login(self.emp)
+        response = self.client.get(f"/tasks/me/{task.pk}/edit/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_manager_can_correct_any_task(self):
+        task = self.make_task(owner=self.other)
+        self.client.force_login(self.boss)
+        self.assertEqual(self.client.get(f"/tasks/me/{task.pk}/edit/").status_code, 200)
+
+    def test_delete_needs_a_post(self):
+        """A plain link must not be able to delete an entry."""
+        task = self.make_task()
+        self.client.force_login(self.emp)
+        self.assertEqual(self.client.get(f"/tasks/me/{task.pk}/delete/").status_code, 405)
+        self.assertTrue(DailyTask.objects.filter(pk=task.pk).exists())
+        self.client.post(f"/tasks/me/{task.pk}/delete/", follow=True)
+        self.assertFalse(DailyTask.objects.filter(pk=task.pk).exists())
+
+    def test_bad_status_is_ignored(self):
+        task = self.make_task()
+        self.client.force_login(self.emp)
+        self.client.post(f"/tasks/me/{task.pk}/progress/FINISHED/", follow=True)
+        task.refresh_from_db()
+        self.assertEqual(task.progress, "IN_PROGRESS")
+
+    def test_open_flag(self):
+        self.assertTrue(self.make_task(progress="IN_PROGRESS").is_open)
+        self.assertTrue(self.make_task(progress="BLOCKED").is_open)
+        self.assertFalse(self.make_task(progress="DONE").is_open)

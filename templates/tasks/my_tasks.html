@@ -9,11 +9,18 @@
     <span class="right tiny muted">{{ day.tasks|length }} task{{ day.tasks|length|pluralize }} · {{ day.total }}</span></div>
     <div class="bd flush"><table><tbody>
       {% for t in day.tasks %}<tr>
-        <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details }}</div>{% endif %}</td>
+        <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details }}</div>{% endif %}
+          {% if t.was_edited %}<div class="tiny muted">edited {{ t.updated_at|date:"d M, h:i A" }}</div>{% endif %}</td>
         <td class="small">{{ t.project|default:"—" }}</td>
         <td class="mono small">{{ t.duration_display }}</td>
         <td><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span></td>
-        <td><a class="tiny" href="{% url 'tasks:task_delete' t.pk %}">delete</a></td>
+        <td style="white-space:nowrap">
+          {% if t.is_open %}
+            <form method="post" action="{% url 'tasks:task_progress' t.pk 'DONE' %}" style="display:inline">
+              {% csrf_token %}<button class="btn sm ok">Mark done</button></form>
+          {% endif %}
+          <a class="btn sm" href="{% url 'tasks:task_edit' t.pk %}?next={{ request.path }}">Edit</a>
+        </td>
       </tr>{% endfor %}
     </tbody></table></div></div>
   {% empty %}

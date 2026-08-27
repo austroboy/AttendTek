@@ -18,7 +18,8 @@
     <div><b>{{ row.employee.display_name }}</b><span>{{ row.employee.employee_id }}</span></div></div>
     <span class="right badge muted">{{ row.total }}</span></div>
     <div class="bd">{% for t in row.tasks %}
-      <div class="kv"><span><b>{{ t.title }}</b>{% if t.project %}<span class="tiny muted"> · {{ t.project }}</span>{% endif %}</span>
+      <div class="kv"><span><b>{{ t.title }}</b>{% if t.project %}<span class="tiny muted"> · {{ t.project }}</span>{% endif %}
+          <a class="tiny" href="{% url 'tasks:task_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">edit</a></span>
         <span><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span> <b>{{ t.duration_display }}</b></span></div>
     {% endfor %}</div></div>
   {% empty %}<div class="card"><div class="empty"><b>No tasks submitted on this day</b></div></div>{% endfor %}

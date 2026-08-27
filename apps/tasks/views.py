@@ -2,7 +2,9 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 from django.utils import timezone
 
 from apps.accounts.models import User
@@ -47,12 +49,54 @@ def my_tasks(request):
     })
 
 
+def _own_task(request, pk):
+    """The employee's own task - or any task when a manager is correcting one."""
+    task = get_object_or_404(DailyTask.objects.select_related("employee"), pk=pk)
+    if task.employee_id != request.user.id and not request.user.is_manager:
+        raise PermissionDenied("That task belongs to someone else.")
+    return task
+
+
 @login_required
+def task_edit(request, pk):
+    """Change a task after logging it - most often to close off something
+    that was still in progress when it was first written down."""
+    task = _own_task(request, pk)
+    form = DailyTaskForm(request.POST or None, instance=task)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        messages.success(request, f'"{task.title}" updated.')
+        return redirect(request.POST.get("next") or "tasks:my_tasks")
+    return render(request, "tasks/task_form.html", {
+        "form": form, "task": task,
+        "next": request.GET.get("next", ""),
+    })
+
+
+@login_required
+@require_POST
+def task_set_progress(request, pk, progress):
+    """One-click way to move a task to done, in progress or blocked."""
+    task = _own_task(request, pk)
+    valid = dict(DailyTask.Progress.choices)
+    if progress not in valid:
+        messages.error(request, "Unknown status.")
+    else:
+        task.progress = progress
+        task.save(update_fields=["progress", "updated_at"])
+        messages.success(request, f'"{task.title}" marked {valid[progress].lower()}.')
+    return redirect(request.POST.get("next") or "tasks:my_tasks")
+
+
+@login_required
+@require_POST
 def task_delete(request, pk):
-    task = get_object_or_404(DailyTask, pk=pk, employee=request.user)
+    """Deleting is a POST so a stray link or a page prefetch cannot wipe an entry."""
+    task = _own_task(request, pk)
+    title = task.title
     task.delete()
-    messages.info(request, "Task deleted.")
-    return redirect("tasks:my_tasks")
+    messages.info(request, f'"{title}" deleted.')
+    return redirect(request.POST.get("next") or "tasks:my_tasks")
 
 
 @manager_required

@@ -1,0 +1,58 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Edit task{% endblock %}
+{% block eyebrow %}{{ task.date|date:"l, d M Y" }}{% if task.employee != user %} · {{ task.employee.display_name }}{% endif %}{% endblock %}
+{% block heading %}Edit task{% endblock %}
+
+{% block content %}
+<div class="card" style="max-width:640px"><div class="bd">
+  <div class="row" style="margin-bottom:14px">
+    <span class="badge {{ task.badge_class }}">{{ task.get_progress_display }}</span>
+    <span class="tiny muted">logged {{ task.created_at|date:"d M, h:i A" }}</span>
+    {% if task.was_edited %}<span class="tiny muted">· edited {{ task.updated_at|date:"d M, h:i A" }}</span>{% endif %}
+  </div>
+
+  <form method="post">{% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="form-grid">
+      <div class="fgroup"><label for="{{ form.date.id_for_label }}">Date</label>{{ form.date }}</div>
+      <div class="fgroup"><label for="{{ form.project.id_for_label }}">Project</label>{{ form.project }}</div>
+      <div class="fgroup full"><label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>{{ form.title }}
+        {% for e in form.title.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+
+      <div class="fgroup">
+        <label>How long did it take?</label>
+        <div class="row" style="gap:8px">
+          <div style="flex:1">{{ form.hours }}<div class="help">hours</div></div>
+          <div style="flex:1">{{ form.minutes }}<div class="help">minutes</div></div>
+        </div>
+      </div>
+      <div class="fgroup"><label for="{{ form.progress.id_for_label }}">Progress</label>{{ form.progress }}</div>
+      <div class="fgroup full"><label for="{{ form.details.id_for_label }}">{{ form.details.label }}</label>{{ form.details }}</div>
+    </div>
+
+    <div class="row" style="gap:6px;margin-bottom:12px">
+      <button type="button" class="btn sm" data-duration="15">15m</button>
+      <button type="button" class="btn sm" data-duration="30">30m</button>
+      <button type="button" class="btn sm" data-duration="60">1h</button>
+      <button type="button" class="btn sm" data-duration="120">2h</button>
+      <button type="button" class="btn sm" data-duration="240">4h</button>
+      <button type="button" class="btn sm" data-duration="480">8h</button>
+    </div>
+
+    {% for e in form.non_field_errors %}<div class="msg error">{{ e }}</div>{% endfor %}
+    <div class="row">
+      <button class="btn primary">Save changes</button>
+      <a class="btn" href="{{ next|default:'/tasks/me/' }}">Cancel</a>
+    </div>
+  </form>
+
+  <div class="sep"></div>
+  <form method="post" action="{% url 'tasks:task_delete' task.pk %}"
+        onsubmit="return confirm('Delete this task? This cannot be undone.')">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
+    <button class="btn danger sm">Delete this task</button>
+  </form>
+</div></div>
+
+<script src="{% static 'js/task-duration.js' %}"></script>
+{% endblock %}

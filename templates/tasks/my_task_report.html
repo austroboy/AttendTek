@@ -56,15 +56,22 @@
 
     <div class="card"><div class="hd"><h2>Every task in this {{ kind }}</h2></div>
       <div class="bd flush"><div class="table-wrap"><table>
-        <thead><tr><th>Date</th><th>Task</th><th>Project</th><th>Time</th><th>Progress</th></tr></thead>
+        <thead><tr><th>Date</th><th>Task</th><th>Project</th><th>Time</th><th>Progress</th><th></th></tr></thead>
         <tbody>{% for t in summary.tasks %}<tr>
           <td class="mono small">{{ t.date|date:"d M" }}</td>
           <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details|truncatechars:70 }}</div>{% endif %}</td>
           <td class="small">{{ t.project|default:"—" }}</td>
           <td class="mono small">{{ t.duration_display }}</td>
           <td><span class="badge {{ t.badge_class }}">{{ t.get_progress_display }}</span></td>
+          <td style="white-space:nowrap">
+            {% if t.is_open %}
+              <form method="post" action="{% url 'tasks:task_progress' t.pk 'DONE' %}" style="display:inline">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <button class="btn sm ok">Done</button></form>
+            {% endif %}
+            <a class="tiny" href="{% url 'tasks:task_edit' t.pk %}?next={{ request.get_full_path|urlencode }}">edit</a></td>
         </tr>{% empty %}
-          <tr><td colspan="5"><div class="empty"><b>Nothing logged in this {{ kind }}</b>
+          <tr><td colspan="6"><div class="empty"><b>Nothing logged in this {{ kind }}</b>
             Log what you worked on and it will show up here.</div></td></tr>
         {% endfor %}</tbody>
       </table></div></div>
