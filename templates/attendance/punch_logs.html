@@ -7,10 +7,14 @@
       <select class="field" name="show" style="width:auto"><option value="all">All</option>
         <option value="unmatched" {% if show == 'unmatched' %}selected{% endif %}>Sudhu unmatched</option></select>
       <button class="btn sm">Show</button></form>
-    {% if unmatched_total %}<span class="badge bad right">{{ unmatched_total }} unmatched</span>{% endif %}
+    <span class="right">
+      {% if self_today %}<span class="badge info">{{ self_today }} web punch{{ self_today|pluralize:"es" }}</span>{% endif %}
+      {% if away_today %}<a class="badge warn" href="?date={{ day|date:'Y-m-d' }}&away=1">{{ away_today }} away from office</a>{% endif %}
+      {% if unmatched_total %}<span class="badge bad">{{ unmatched_total }} unmatched</span>{% endif %}
+    </span>
   </div>
   <div class="bd flush"><div class="table-wrap"><table>
-    <thead><tr><th>#</th><th>Time</th><th>In / out</th><th>Employee</th><th>Card no</th><th>Device user</th><th>Source</th></tr></thead>
+    <thead><tr><th>#</th><th>Time</th><th>In / out</th><th>Employee</th><th>Where</th><th>Source</th><th>Note</th></tr></thead>
     <tbody>{% for l in logs %}<tr>
       <td class="mono tiny">{{ l.sequence|default:"—" }}</td>
       <td class="mono">{{ l.punch_time|time:"h:i:s A" }}</td>
@@ -19,9 +23,17 @@
           {% elif l.direction == 'OUT' %}<span class="badge info">Out</span>
           {% else %}<span class="tiny muted">—</span>{% endif %}</td>
       <td>{% if l.employee %}{{ l.employee.display_name }}{% else %}<span class="badge bad">unmatched</span>{% endif %}</td>
-      <td class="mono small">{{ l.card_no|default:"—" }}</td>
-      <td class="mono small">{{ l.device_user_id|default:"—" }}</td>
-      <td><span class="badge muted">{{ l.get_source_display }}</span></td>
+      <td class="small">
+        {% if l.has_location %}
+          <a href="{{ l.map_url }}" target="_blank" rel="noopener" class="badge {{ l.location_badge }}">{{ l.get_location_status_display }}</a>
+          <div class="tiny muted mono">
+            {% if l.office %}{{ l.distance_display }} from {{ l.office.name }}{% else %}{{ l.latitude }}, {{ l.longitude }}{% endif %}
+            {% if l.accuracy_m %} · ±{{ l.accuracy_m }}m{% endif %}</div>
+        {% elif l.source == 'SELF' %}<span class="badge bad">no location</span>
+        {% else %}<span class="tiny muted">card reader</span>{% endif %}</td>
+      <td><span class="badge {% if l.source == 'SELF' %}info{% else %}muted{% endif %}">{{ l.get_source_display }}</span>
+        {% if l.card_no %}<div class="tiny muted mono">{{ l.card_no }}</div>{% endif %}</td>
+      <td class="tiny muted">{{ l.note|truncatechars:40 }}</td>
     </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No punches on this day</b>Sync the device to pull them in.</div></td></tr>{% endfor %}
     </tbody></table></div></div></div>
 </div>

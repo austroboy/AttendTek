@@ -1,7 +1,37 @@
-{% extends "base.html" %}{% block title %}Home office{% endblock %}
-{% block eyebrow %}My portal{% endblock %}{% block heading %}Home office{% endblock %}
+{% extends "base.html" %}{% load static %}{% block title %}Home office<script src="{% static 'js/self-punch.js' %}"></script>
+{% endblock %}
+{% block eyebrow %}My portal<script src="{% static 'js/self-punch.js' %}"></script>
+{% endblock %}{% block heading %}Home office<script src="{% static 'js/self-punch.js' %}"></script>
+{% endblock %}
 {% block content %}
 <div class="grid g-side"><div class="stack">
+  <div class="card">
+    <div class="hd"><h2>Punch from home</h2>
+      <span class="right badge {% if running %}ok{% else %}muted{% endif %}">
+        <i class="dot"></i>{% if running %}started {{ running.check_in|time:"h:i A" }}{% else %}not started{% endif %}</span></div>
+    <div class="bd">
+      <p class="small muted" style="margin-top:0">One tap records the time from the office server
+        and attaches where you are. No approval needed — it goes straight onto your attendance.</p>
+      <div id="punch-status" hidden></div>
+      <form method="post" id="punch-form" data-require-location="0">{% csrf_token %}
+        <input type="hidden" name="form" value="{% if running %}home_out{% else %}home_in{% endif %}">
+        <input type="hidden" name="latitude" id="id_latitude">
+        <input type="hidden" name="longitude" id="id_longitude">
+        <input type="hidden" name="accuracy_m" id="id_accuracy_m">
+        <input type="hidden" name="location_error" id="id_location_error">
+        {% if running %}
+          <div class="fgroup"><label>What did you get done?</label>
+            <textarea class="field" name="work_summary" rows="2">{{ running.work_summary }}</textarea></div>
+        {% else %}
+          <div class="fgroup"><label>Why are you working from home?</label>
+            <input class="field" name="reason" placeholder="e.g. client work, unwell"></div>
+        {% endif %}
+        <button class="btn primary block" id="punch-button" type="submit" style="padding:14px;font-size:15px">
+          {% if running %}Finish home office{% else %}Start home office{% endif %}</button>
+      </form>
+    </div>
+  </div>
+
   {% if running %}
   <div class="card"><div class="hd"><h2>{{ running.date|date:"d M Y" }} — in progress</h2>
     <span class="badge warn right">In {{ running.check_in|time:"h:i A" }}</span></div>
@@ -23,14 +53,17 @@
   {% endif %}
 
   <div class="card"><div class="hd"><h2>Previous entries</h2></div><div class="bd flush"><table>
-    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th><th>Note</th></tr></thead>
+    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Map</th><th>Status</th><th>Note</th></tr></thead>
     <tbody>{% for h in entries %}<tr>
       <td class="mono small">{{ h.date|date:"d M Y" }}</td>
       <td class="mono">{{ h.check_in|time:"h:i A"|default:"—" }}</td>
       <td class="mono">{{ h.check_out|time:"h:i A"|default:"—" }}</td>
+      <td class="tiny">{% if h.in_map_url %}<a href="{{ h.in_map_url }}" target="_blank" rel="noopener">in</a>{% endif %}
+        {% if h.out_map_url %} · <a href="{{ h.out_map_url }}" target="_blank" rel="noopener">out</a>{% endif %}
+        {% if not h.in_map_url and not h.out_map_url %}<span class="muted">—</span>{% endif %}</td>
       <td><span class="badge {{ h.badge_class }}">{{ h.get_status_display }}</span></td>
       <td class="tiny muted">{{ h.review_note|default:h.reason|truncatechars:40 }}</td>
-    </tr>{% empty %}<tr><td colspan="5"><div class="empty"><b>No home office entries yet</b></div></td></tr>{% endfor %}
+    </tr>{% empty %}<tr><td colspan="6"><div class="empty"><b>No home office entries yet</b></div></td></tr>{% endfor %}
     </tbody></table></div></div>
 </div>
 <div class="card" style="align-self:start"><div class="hd"><h3>The rules</h3></div><div class="bd">
@@ -39,4 +72,5 @@
   <div class="kv"><span>Required hours</span><b>{{ user.effective_shift.required_hours }} h</b></div>
   <p class="tiny muted">The same rule applies at home — a later start means a later required out time.</p>
 </div></div></div>
+<script src="{% static 'js/self-punch.js' %}"></script>
 {% endblock %}

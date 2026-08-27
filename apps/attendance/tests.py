@@ -5,9 +5,12 @@ from django.test import TestCase
 
 from apps.accounts.models import Shift, User
 
-from .models import DailyAttendance, Outing, PunchLog
+from datetime import timedelta
+
+from .geo import distance_metres
+from .models import (DailyAttendance, OfficeLocation, Outing, PunchLog, PunchPolicy)
 from .rules import evaluate_day, required_out_time
-from .services import rebuild_day, record_punch
+from .services import SelfPunchError, rebuild_day, record_punch, self_punch
 
 S = DailyAttendance.Status
 DAY = date(2026, 8, 17)  # Monday
@@ -249,3 +252,114 @@ class MultiPunchTests(TestCase):
         outing.refresh_from_db()
         self.assertEqual(outing.destination, "Client office, Gulshan")
         self.assertEqual(outing.note, "Contract signing")
+
+
+class SelfPunchTests(TestCase):
+    """Punching from a browser, with a location attached."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), required_hours=9, is_default=True, weekend_days="4,5",
+        )
+        cls.emp = User.objects.create_user(
+            username="kamal", password="pw", employee_id="EMP-020", shift=cls.shift
+        )
+        # Office at Gulshan 1 circle, 200 m radius.
+        cls.office = OfficeLocation.objects.create(
+            name="Head office", latitude="23.780600", longitude="90.416500", radius_m=200
+        )
+
+    def setUp(self):
+        self.policy = PunchPolicy.get_solo()
+
+    def test_distance_calculation(self):
+        """Roughly 1 km north of the office should read as about 1 km."""
+        d = distance_metres(23.7806, 90.4165, 23.7896, 90.4165)
+        self.assertTrue(950 < d < 1050, d)
+
+    def test_punch_inside_office(self):
+        log, record, direction = self_punch(
+            self.emp, latitude="23.780650", longitude="90.416520", accuracy_m=20
+        )
+        self.assertEqual(direction, PunchLog.Direction.IN)
+        self.assertEqual(log.location_status, PunchLog.LocationStatus.INSIDE)
+        self.assertEqual(log.office, self.office)
+        self.assertLess(log.distance_m, 50)
+        self.assertEqual(log.source, PunchLog.Source.SELF)
+
+    def test_punch_away_from_office_is_flagged_not_blocked(self):
+        """Field staff must still be able to punch - it is just marked as away."""
+        log, _, _ = self_punch(self.emp, latitude="23.800000", longitude="90.450000", accuracy_m=30)
+        self.assertEqual(log.location_status, PunchLog.LocationStatus.OUTSIDE)
+        self.assertGreater(log.distance_m, 1000)
+
+    def test_office_only_mode_blocks_remote_punch(self):
+        self.policy.allow_outside_office = False
+        self.policy.save()
+        with self.assertRaises(SelfPunchError):
+            self_punch(self.emp, latitude="23.900000", longitude="90.500000", accuracy_m=30)
+
+    def test_location_required_by_default(self):
+        with self.assertRaises(SelfPunchError):
+            self_punch(self.emp)
+
+    def test_punch_without_location_when_allowed(self):
+        self.policy.require_location = False
+        self.policy.save()
+        log, _, _ = self_punch(self.emp)
+        self.assertEqual(log.location_status, PunchLog.LocationStatus.MISSING)
+
+    def test_vague_reading_is_flagged(self):
+        self.policy.max_accuracy_m = 100
+        self.policy.save()
+        log, _, _ = self_punch(
+            self.emp, latitude="23.780650", longitude="90.416520", accuracy_m=800
+        )
+        self.assertEqual(log.location_status, PunchLog.LocationStatus.WEAK)
+
+    def test_punches_alternate_in_and_out(self):
+        base = datetime.combine(DAY, time(9, 0))
+        directions = []
+        for i in range(4):
+            _, _, direction = self_punch(
+                self.emp, latitude="23.780650", longitude="90.416520", accuracy_m=20,
+                when=base + timedelta(hours=i * 2),
+            )
+            directions.append(direction)
+        self.assertEqual(directions, ["IN", "OUT", "IN", "OUT"])
+
+    def test_self_punches_feed_the_normal_day_calculation(self):
+        base = datetime.combine(DAY, time(10, 2))
+        self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                   accuracy_m=20, when=base)
+        self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                   accuracy_m=20, when=datetime.combine(DAY, time(19, 2)))
+        rec = DailyAttendance.objects.get(employee=self.emp, date=DAY)
+        self.assertEqual(rec.status, S.LATE)
+        self.assertEqual(rec.required_out.time(), time(19, 2))
+
+    def test_switching_self_punch_off(self):
+        self.policy.self_punch_enabled = False
+        self.policy.save()
+        with self.assertRaises(SelfPunchError):
+            self_punch(self.emp, latitude="23.780650", longitude="90.416520", accuracy_m=20)
+
+    def test_double_submit_is_rejected(self):
+        when = datetime.combine(DAY, time(9, 0))
+        self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                   accuracy_m=20, when=when)
+        with self.assertRaises(SelfPunchError):
+            self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                       accuracy_m=20, when=when)
+
+    def test_double_tap_is_explained_not_swallowed(self):
+        """Tapping twice in a minute gets a clear message, not a silent drop."""
+        when = datetime.combine(DAY, time(9, 0))
+        self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                   accuracy_m=20, when=when)
+        with self.assertRaises(SelfPunchError) as caught:
+            self_punch(self.emp, latitude="23.780650", longitude="90.416520",
+                       accuracy_m=20, when=when + timedelta(seconds=30))
+        self.assertIn("minutes ago", str(caught.exception))

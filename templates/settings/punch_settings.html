@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% load static %}
+{% block title %}Self punch{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}Self punch &amp; office location{% endblock %}
+
+{% block content %}
+<div class="msg info">
+  Self punching lets people record attendance from a phone when the card reader is
+  unavailable. It is weaker evidence than a card on a reader — a browser location can be
+  faked — so every punch is stored with its distance from the office and marked plainly
+  as at the office or away from it.
+</div>
+
+<div class="grid g-2">
+  <div class="card"><div class="hd"><h2>Rules</h2></div><div class="bd">
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="form" value="policy">
+      {% include "partials/_form.html" with form=policy_form %}
+      <button class="btn primary">Save rules</button>
+    </form>
+  </div></div>
+
+  <div class="card"><div class="hd"><h2>Add an office</h2></div><div class="bd">
+    <p class="small muted" style="margin-top:0">Open this page while sitting in the office and
+      press the button below — it fills in the coordinates from where you are.</p>
+    <form method="post">{% csrf_token %}
+      <input type="hidden" name="form" value="office">
+      <div class="form-grid">{% include "partials/_form.html" with form=office_form wide="address" %}</div>
+      <div class="row" style="margin-bottom:10px">
+        <button class="btn" type="button" id="use-my-location">Use my current location</button>
+      </div>
+      <div class="tiny muted" id="location-note" style="margin-bottom:10px"></div>
+      <button class="btn primary">Add office</button>
+    </form>
+  </div></div>
+</div>
+
+<div class="card" style="margin-top:14px"><div class="hd"><h2>Offices on record</h2></div>
+  <div class="bd flush"><table>
+    <thead><tr><th>Name</th><th>Coordinates</th><th>Radius</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for o in offices %}<tr>
+      <td><b>{{ o.name }}</b>{% if o.address %}<div class="tiny muted">{{ o.address }}</div>{% endif %}</td>
+      <td class="mono small"><a href="{{ o.map_url }}" target="_blank" rel="noopener">{{ o.latitude }}, {{ o.longitude }}</a></td>
+      <td class="mono small">{{ o.radius_m }} m</td>
+      <td><span class="badge {% if o.is_active %}ok{% else %}muted{% endif %}">{% if o.is_active %}active{% else %}off{% endif %}</span></td>
+      <td><a class="tiny" href="{% url 'attendance:office_toggle' o.pk %}">{% if o.is_active %}turn off{% else %}turn on{% endif %}</a></td>
+    </tr>{% empty %}
+      <tr><td colspan="5"><div class="empty"><b>No office added yet</b>
+        Without one, punches are stored with coordinates but cannot be judged as
+        at the office or away from it.</div></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+</div>
+
+<div class="card" style="margin-top:14px"><div class="hd"><h2>Recent web punches</h2>
+  <a class="right tiny" href="{% url 'attendance:punch_logs' %}?source=SELF">All punch logs →</a></div>
+  <div class="bd flush"><table>
+    <thead><tr><th>Time</th><th>Employee</th><th>In / out</th><th>Where</th><th>Accuracy</th><th>Map</th></tr></thead>
+    <tbody>{% for p in recent_self_punches %}<tr>
+      <td class="mono small">{{ p.punch_time|date:"d M, h:i A" }}</td>
+      <td class="small">{{ p.employee.display_name }}</td>
+      <td>{% if p.direction == 'IN' %}<span class="badge ok">In</span>{% else %}<span class="badge info">Out</span>{% endif %}</td>
+      <td><span class="badge {{ p.location_badge }}">{{ p.get_location_status_display }}</span>
+        {% if p.office %}<div class="tiny muted">{{ p.distance_display }} from {{ p.office.name }}</div>{% endif %}</td>
+      <td class="mono tiny">{% if p.accuracy_m %}±{{ p.accuracy_m }} m{% else %}—{% endif %}</td>
+      <td>{% if p.map_url %}<a class="tiny" href="{{ p.map_url }}" target="_blank" rel="noopener">open</a>{% else %}—{% endif %}</td>
+    </tr>{% empty %}<tr><td colspan="6"><div class="empty">No web punches yet.</div></td></tr>{% endfor %}
+    </tbody></table></div>
+</div>
+
+<script src="{% static 'js/pick-location.js' %}"></script>
+{% endblock %}

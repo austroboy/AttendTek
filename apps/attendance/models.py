@@ -29,9 +29,17 @@ class PunchLog(models.Model):
 
     class Source(models.TextChoices):
         DEVICE = "DEVICE", "ZKTeco device"
+        SELF = "SELF", "Self punch (web)"
         MANUAL = "MANUAL", "Manual entry"
         IMPORT = "IMPORT", "CSV import"
         HOME = "HOME", "Home office"
+
+    class LocationStatus(models.TextChoices):
+        INSIDE = "INSIDE", "At the office"
+        OUTSIDE = "OUTSIDE", "Away from the office"
+        UNKNOWN = "UNKNOWN", "No office set"
+        MISSING = "MISSING", "Location not shared"
+        WEAK = "WEAK", "Location too vague"
 
     employee = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -56,6 +64,26 @@ class PunchLog(models.Model):
     )
     raw_status = models.SmallIntegerField(default=0)
     is_matched = models.BooleanField(default=True, help_text="Whether the punch was matched to an employee")
+
+    # --- where the punch came from (self punches only) ---
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    accuracy_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text="How precise the phone said the reading was, in metres"
+    )
+    location_status = models.CharField(
+        max_length=8, choices=LocationStatus.choices, default=LocationStatus.UNKNOWN
+    )
+    office = models.ForeignKey(
+        "attendance.OfficeLocation", null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="punches",
+        help_text="Nearest office when the punch was taken",
+    )
+    distance_m = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Distance from that office, in metres"
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=200, blank=True)
     note = models.CharField(max_length=160, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -75,6 +103,40 @@ class PunchLog(models.Model):
     @property
     def day(self):
         return self.punch_time.date()
+
+    @property
+    def has_location(self):
+        return self.latitude is not None and self.longitude is not None
+
+    @property
+    def coordinates(self):
+        return f"{self.latitude},{self.longitude}" if self.has_location else ""
+
+    @property
+    def map_url(self):
+        """A plain OpenStreetMap link - no API key, opens anywhere."""
+        if not self.has_location:
+            return ""
+        return (f"https://www.openstreetmap.org/?mlat={self.latitude}"
+                f"&mlon={self.longitude}#map=18/{self.latitude}/{self.longitude}")
+
+    @property
+    def distance_display(self):
+        if self.distance_m is None:
+            return "—"
+        if self.distance_m < 1000:
+            return f"{self.distance_m} m"
+        return f"{self.distance_m / 1000:.1f} km"
+
+    @property
+    def location_badge(self):
+        return {
+            self.LocationStatus.INSIDE: "ok",
+            self.LocationStatus.OUTSIDE: "warn",
+            self.LocationStatus.UNKNOWN: "muted",
+            self.LocationStatus.MISSING: "bad",
+            self.LocationStatus.WEAK: "warn",
+        }.get(self.location_status, "muted")
 
 
 class DailyAttendance(models.Model):
@@ -249,6 +311,17 @@ class HomeOfficeEntry(models.Model):
     check_out = models.DateTimeField(null=True, blank=True)
     reason = models.TextField(help_text="Why you are working from home")
     work_summary = models.TextField(blank=True)
+
+    # Where the employee was when they started and finished.
+    in_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    in_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    in_accuracy_m = models.PositiveIntegerField(null=True, blank=True)
+    out_latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    out_longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    out_accuracy_m = models.PositiveIntegerField(null=True, blank=True)
+    is_self_punched = models.BooleanField(
+        default=False, help_text="Times came from the punch buttons, not typed in by hand"
+    )
     status = models.CharField(max_length=8, choices=Status.choices, default=Status.PENDING)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True,
@@ -271,6 +344,20 @@ class HomeOfficeEntry(models.Model):
     @property
     def is_running(self):
         return self.check_in and not self.check_out
+
+    @property
+    def in_map_url(self):
+        if self.in_latitude is None:
+            return ""
+        return (f"https://www.openstreetmap.org/?mlat={self.in_latitude}"
+                f"&mlon={self.in_longitude}#map=18/{self.in_latitude}/{self.in_longitude}")
+
+    @property
+    def out_map_url(self):
+        if self.out_latitude is None:
+            return ""
+        return (f"https://www.openstreetmap.org/?mlat={self.out_latitude}"
+                f"&mlon={self.out_longitude}#map=18/{self.out_latitude}/{self.out_longitude}")
 
     @property
     def badge_class(self):
@@ -370,3 +457,79 @@ class Outing(models.Model):
     @property
     def needs_explanation(self):
         return self.purpose == self.Purpose.UNSPECIFIED
+
+
+class OfficeLocation(models.Model):
+    """A place where being present counts as being at work.
+
+    Coordinates alone say very little - 23.79, 90.41 means nothing to a manager
+    reading a report. Storing the office and a radius turns every punch into a
+    plain answer: at the office, or 4 km away.
+    """
+
+    name = models.CharField(max_length=80, help_text="e.g. Head office, Uttara branch")
+    latitude = models.DecimalField(max_digits=9, decimal_places=6)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6)
+    radius_m = models.PositiveIntegerField(
+        default=200,
+        help_text="How far from this point still counts as being at the office, in metres",
+    )
+    address = models.CharField(max_length=200, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.latitude}, {self.longitude})"
+
+    @property
+    def map_url(self):
+        return (f"https://www.openstreetmap.org/?mlat={self.latitude}"
+                f"&mlon={self.longitude}#map=17/{self.latitude}/{self.longitude}")
+
+
+class PunchPolicy(models.Model):
+    """One row of settings for punching from a phone or laptop.
+
+    This exists because the card reader is not always available - it breaks, or
+    someone is at a client site all day. Self punching fills that gap, but it is
+    weaker evidence than a card on a reader, so the rules around it are visible
+    and adjustable rather than hidden in the code.
+    """
+
+    self_punch_enabled = models.BooleanField(
+        default=True, help_text="Let employees punch in and out from the website"
+    )
+    require_location = models.BooleanField(
+        default=True, help_text="Refuse the punch if the browser will not share a location"
+    )
+    allow_outside_office = models.BooleanField(
+        default=True,
+        help_text=(
+            "Allow punches from away from the office. Leave this on for field staff - "
+            "the punch is still marked as away, so nothing is hidden."
+        ),
+    )
+    max_accuracy_m = models.PositiveIntegerField(
+        default=500,
+        help_text="A reading vaguer than this is flagged. Phones indoors are often 50-100 m.",
+    )
+    notice = models.CharField(
+        max_length=200, blank=True,
+        help_text="A line shown to employees on the punch page",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name_plural = "Punch policy"
+
+    def __str__(self):
+        return "Self punch policy"
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj is None:
+            obj = cls.objects.create()
+        return obj

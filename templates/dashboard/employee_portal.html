@@ -30,6 +30,20 @@
       </div>
     </div>
 
+    {% if punch_state.policy.self_punch_enabled %}
+    <div class="card">
+      <div class="hd"><h2>Punch</h2>
+        <span class="right badge {% if punch_state.is_at_work %}ok{% else %}muted{% endif %}">
+          <i class="dot"></i>{% if punch_state.is_at_work %}at work{% else %}not in{% endif %}</span></div>
+      <div class="bd">
+        <p class="small muted" style="margin-top:0">Card reader unavailable, or working away from
+          the office? Punch from here — your location is recorded with it.</p>
+        <a class="btn primary block" style="padding:14px;font-size:15px" href="{% url 'attendance:self_punch' %}">
+          {% if punch_state.next_direction == 'IN' %}Punch IN{% else %}Punch OUT{% endif %}</a>
+      </div>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="hd"><h2>Today's trips out</h2>
         <a class="right tiny" href="{% url 'attendance:my_outings' %}">All trips →</a></div>

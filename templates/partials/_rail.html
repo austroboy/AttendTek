@@ -34,11 +34,13 @@
     <a class="nav {% nav_active 'devices:list' 'devices:create' 'devices:edit' %}" href="{% url 'devices:list' %}">Devices</a>
     <a class="nav {% nav_active 'accounts:settings' 'accounts:shift_create' 'accounts:shift_edit' 'accounts:department_create' 'accounts:designation_create' %}" href="{% url 'accounts:settings' %}">Shift &amp; rules</a>
     <a class="nav {% nav_active 'attendance:holidays' %}" href="{% url 'attendance:holidays' %}">Holidays</a>
+    <a class="nav {% nav_active 'attendance:punch_settings' %}" href="{% url 'attendance:punch_settings' %}">Self punch &amp; GPS</a>
     <a class="nav {% nav_active 'leaves:types' %}" href="{% url 'leaves:types' %}">Leave types</a>
   {% endif %}
 
   <div class="group">My portal</div>
   <a class="nav {% nav_active 'attendance:my_portal' %}" href="{% url 'attendance:my_portal' %}">My day</a>
+  <a class="nav {% nav_active 'attendance:self_punch' %}" href="{% url 'attendance:self_punch' %}">Punch in / out</a>
   <a class="nav {% nav_active 'attendance:my_attendance' %}" href="{% url 'attendance:my_attendance' %}">My attendance</a>
   <a class="nav {% nav_active 'tasks:my_tasks' %}" href="{% url 'tasks:my_tasks' %}">My tasks</a>
   <a class="nav {% nav_active 'leaves:my_leaves' %}" href="{% url 'leaves:my_leaves' %}">My leave</a>

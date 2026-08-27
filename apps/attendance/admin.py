@@ -1,12 +1,13 @@
 from django.contrib import admin
 
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
+from .models import (DailyAttendance, Holiday, HomeOfficeEntry, OfficeLocation,
+                     Outing, PunchLog, PunchPolicy)
 
 
 @admin.register(PunchLog)
 class PunchLogAdmin(admin.ModelAdmin):
-    list_display = ("punch_time", "employee", "card_no", "source", "is_matched", "device")
-    list_filter = ("source", "is_matched", "device")
+    list_display = ("punch_time", "employee", "direction", "source", "location_status", "distance_m")
+    list_filter = ("source", "direction", "location_status", "is_matched")
     search_fields = ("card_no", "device_user_id", "employee__employee_id")
     date_hierarchy = "punch_time"
 
@@ -27,4 +28,4 @@ class OutingAdmin(admin.ModelAdmin):
     date_hierarchy = "date"
 
 
-admin.site.register([Holiday, HomeOfficeEntry])
+admin.site.register([Holiday, HomeOfficeEntry, OfficeLocation, PunchPolicy])

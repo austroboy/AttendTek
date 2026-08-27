@@ -15,10 +15,13 @@ urlpatterns = [
     path("home-office/review/", views.home_office_review, name="home_office_review"),
     path("home-office/<int:pk>/<str:decision>/", views.home_office_decide, name="home_office_decide"),
     path("holidays/", views.holiday_list, name="holidays"),
+    path("punch-settings/", views.punch_settings, name="punch_settings"),
+    path("punch-settings/office/<int:pk>/toggle/", views.office_delete, name="office_toggle"),
     # employee
     path("me/", views.my_portal, name="my_portal"),
     path("me/attendance/", views.my_attendance, name="my_attendance"),
     path("me/home-office/", views.home_office, name="home_office"),
+    path("me/punch/", views.self_punch_view, name="self_punch"),
     path("me/trips/", views.my_outings, name="my_outings"),
     path("trips/<int:pk>/edit/", views.outing_edit, name="outing_edit"),
 ]

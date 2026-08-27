@@ -124,6 +124,17 @@ class Command(BaseCommand):
                         )
             day += timedelta(days=1)
 
+        # An office to measure web punches against, and the policy row.
+        from apps.attendance.models import OfficeLocation, PunchPolicy
+        OfficeLocation.objects.get_or_create(
+            name="Head office",
+            defaults=dict(latitude="23.780600", longitude="90.416500", radius_m=200,
+                          address="Gulshan 1, Dhaka"),
+        )
+        policy = PunchPolicy.get_solo()
+        policy.notice = "Card reader is down - please punch from here until further notice."
+        policy.save()
+
         Holiday.objects.get_or_create(date=today + timedelta(days=6), defaults={"title": "Company Day"})
         ct = LeaveType.objects.first()
         for emp in employees[:3]:

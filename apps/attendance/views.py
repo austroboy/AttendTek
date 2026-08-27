@@ -17,10 +17,13 @@ from apps.tasks.models import DailyTask
 
 from .forms import (AttendanceOverrideForm, HolidayForm, HomeOfficeOutForm,
                     HomeOfficeReviewForm, HomeOfficeStartForm, ManualPunchForm,
-                    OutingAdminForm, OutingForm)
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
+                    OfficeLocationForm, OutingAdminForm, OutingForm,
+                    PunchPolicyForm, SelfPunchForm)
+from .models import (DailyAttendance, Holiday, HomeOfficeEntry, OfficeLocation,
+                     Outing, PunchLog, PunchPolicy)
 from .rules import required_out_time
-from .services import day_summary, mark_absentees, month_summary, rebuild_day, record_punch
+from .services import (SelfPunchError, day_summary, mark_absentees, month_summary,
+                       punch_state, rebuild_day, record_punch, self_punch)
 
 
 def _parse_date(value, fallback=None):
@@ -136,9 +139,15 @@ def attendance_edit(request, pk):
 def punch_log_list(request):
     day = _parse_date(request.GET.get("date"))
     show = request.GET.get("show", "all")
-    logs = PunchLog.objects.filter(punch_time__date=day).select_related("employee", "device")
+    logs = (PunchLog.objects.filter(punch_time__date=day)
+            .select_related("employee", "device", "office"))
+    source = request.GET.get("source", "")
     if show == "unmatched":
         logs = logs.filter(is_matched=False)
+    if source:
+        logs = logs.filter(source=source)
+    elif request.GET.get("away") == "1":
+        logs = logs.filter(location_status=PunchLog.LocationStatus.OUTSIDE)
     form = ManualPunchForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         log, created = record_punch(
@@ -152,6 +161,10 @@ def punch_log_list(request):
     return render(request, "attendance/punch_logs.html", {
         "logs": logs.order_by("punch_time"), "day": day, "form": form, "show": show,
         "unmatched_total": PunchLog.objects.filter(is_matched=False).count(),
+        "source": source,
+        "sources": PunchLog.Source.choices,
+        "self_today": logs.filter(source=PunchLog.Source.SELF).count(),
+        "away_today": logs.filter(location_status=PunchLog.LocationStatus.OUTSIDE).count(),
     })
 
 
@@ -243,6 +256,7 @@ def my_portal(request):
     shift = me.effective_shift
     todays_outings = Outing.objects.filter(employee=me, date=today).order_by("left_at")
     return render(request, "dashboard/employee_portal.html", {
+        "punch_state": punch_state(me, today),
         "todays_outings": todays_outings,
         "unlabelled_trips": Outing.objects.filter(
             employee=me, purpose=Outing.Purpose.UNSPECIFIED).count(),
@@ -305,6 +319,40 @@ def home_office(request):
 
     if request.method == "POST":
         kind = request.POST.get("form")
+
+        # The same two buttons as the office punch page, but the time and place
+        # land on the home office entry instead of the punch log.
+        if kind in ("home_in", "home_out"):
+            lat = request.POST.get("latitude") or None
+            lng = request.POST.get("longitude") or None
+            acc = request.POST.get("accuracy_m") or None
+            stamp = app_now().replace(microsecond=0)
+            if kind == "home_in":
+                entry = HomeOfficeEntry.objects.filter(employee=me, date=today).first()
+                if entry and entry.check_in:
+                    messages.info(request, "You already started your home office day.")
+                else:
+                    entry = entry or HomeOfficeEntry(employee=me, date=today)
+                    entry.reason = entry.reason or request.POST.get("reason") or "Working from home"
+                    entry.check_in = stamp
+                    entry.in_latitude, entry.in_longitude, entry.in_accuracy_m = lat, lng, acc
+                    entry.is_self_punched = True
+                    entry.status = HomeOfficeEntry.Status.APPROVED
+                    entry.save()
+                    messages.success(request, f"Home office started at {stamp:%I:%M %p}.")
+            else:
+                entry = HomeOfficeEntry.objects.filter(
+                    employee=me, check_out__isnull=True).order_by("-date").first()
+                if not entry:
+                    messages.error(request, "No open home office day to close.")
+                else:
+                    entry.check_out = stamp
+                    entry.out_latitude, entry.out_longitude, entry.out_accuracy_m = lat, lng, acc
+                    entry.work_summary = request.POST.get("work_summary") or entry.work_summary
+                    entry.save()
+                    messages.success(request, f"Home office finished at {stamp:%I:%M %p}.")
+            return redirect("attendance:home_office")
+
         if kind == "start":
             start_form = HomeOfficeStartForm(request.POST, employee=me)
             if start_form.is_valid():
@@ -382,3 +430,94 @@ def outing_edit(request, pk):
         messages.success(request, f"{outing.employee.display_name}'s trip updated.")
         return redirect(request.POST.get("next") or "reports:outings")
     return render(request, "attendance/outing_edit.html", {"form": form, "outing": outing})
+
+
+# ================================================================ SELF PUNCH
+def _client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+@login_required
+def self_punch_view(request):
+    """Punch in or out from a phone or laptop, with the location attached.
+
+    Used when the card reader is down, and by anyone whose work keeps them away
+    from the office. The time is taken from the server; the browser only
+    supplies where the person was standing.
+    """
+    me = request.user
+    state = punch_state(me)
+    form = SelfPunchForm(request.POST or None)
+
+    if request.method == "POST" and form.is_valid():
+        data = form.cleaned_data
+        try:
+            log, record, direction = self_punch(
+                me,
+                latitude=data.get("latitude"),
+                longitude=data.get("longitude"),
+                accuracy_m=data.get("accuracy_m"),
+                ip_address=_client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                note=data.get("note") or "",
+            )
+        except SelfPunchError as exc:
+            messages.error(request, str(exc))
+        else:
+            word = "in" if direction == PunchLog.Direction.IN else "out"
+            where = ""
+            if log.location_status == PunchLog.LocationStatus.INSIDE:
+                where = f" at {log.office.name}"
+            elif log.location_status == PunchLog.LocationStatus.OUTSIDE:
+                where = f" - {log.distance_display} from {log.office.name}"
+            messages.success(request, f"Punched {word} at {log.punch_time:%I:%M %p}{where}.")
+            if log.location_status == PunchLog.LocationStatus.MISSING:
+                messages.warning(request, "No location was attached to that punch.")
+        return redirect("attendance:self_punch")
+
+    return render(request, "attendance/self_punch.html", {
+        "form": form,
+        "state": state,
+        "offices": OfficeLocation.objects.filter(is_active=True),
+        "today_record": state["record"],
+    })
+
+
+@manager_required
+def punch_settings(request):
+    """Where the office is, and the rules for punching from a browser."""
+    policy = PunchPolicy.get_solo()
+    policy_form = PunchPolicyForm(
+        request.POST if request.POST.get("form") == "policy" else None, instance=policy)
+    office_form = OfficeLocationForm(
+        request.POST if request.POST.get("form") == "office" else None)
+
+    if request.method == "POST":
+        if request.POST.get("form") == "policy" and policy_form.is_valid():
+            policy_form.save()
+            messages.success(request, "Punch policy saved.")
+            return redirect("attendance:punch_settings")
+        if request.POST.get("form") == "office" and office_form.is_valid():
+            office = office_form.save()
+            messages.success(request, f"{office.name} added.")
+            return redirect("attendance:punch_settings")
+
+    return render(request, "settings/punch_settings.html", {
+        "policy_form": policy_form,
+        "office_form": office_form,
+        "offices": OfficeLocation.objects.all(),
+        "recent_self_punches": PunchLog.objects.filter(source=PunchLog.Source.SELF)
+                                       .select_related("employee", "office")[:10],
+    })
+
+
+@manager_required
+def office_delete(request, pk):
+    office = get_object_or_404(OfficeLocation, pk=pk)
+    office.is_active = not office.is_active
+    office.save(update_fields=["is_active"])
+    messages.info(request, f"{office.name} is now {'active' if office.is_active else 'off'}.")
+    return redirect("attendance:punch_settings")

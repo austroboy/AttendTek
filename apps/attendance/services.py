@@ -9,7 +9,9 @@ from django.db.models import Q
 from apps.accounts.models import Shift, User
 from apps.leaves.models import LeaveRequest
 
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
+from .geo import classify
+from .models import (DailyAttendance, Holiday, HomeOfficeEntry, Outing,
+                     PunchPolicy, PunchLog)
 from .rules import build_segments, evaluate_day
 
 
@@ -260,3 +262,113 @@ def month_summary(employee: User, year: int, month: int) -> dict:
     agg["overtime_hours"] = round(agg["overtime_minutes"] / 60, 1)
     agg["present"] = agg["on_time"] + agg["late"] + agg["early_out"] + agg["half_day"]
     return agg
+
+
+# ---------------------------------------------------------------- self punch
+class SelfPunchError(Exception):
+    """The punch was refused - the message is meant to be shown to the employee."""
+
+
+def next_punch_direction(employee, day=None) -> str:
+    """Is the employee's next tap an IN or an OUT?
+
+    Punches pair off odd/even through the day, so an even number of punches so
+    far means the next one starts a new stretch at work.
+    """
+    from apps.utils import today as _today
+
+    day = day or _today()
+    count = PunchLog.objects.filter(
+        employee=employee, punch_time__date=day, is_ignored=False
+    ).count()
+    return PunchLog.Direction.IN if count % 2 == 0 else PunchLog.Direction.OUT
+
+
+def self_punch(employee, *, latitude=None, longitude=None, accuracy_m=None,
+               ip_address=None, user_agent="", note="", when=None):
+    """Record a punch taken from the employee's own browser.
+
+    The time comes from the server, never from the browser - a phone clock can
+    be changed in a few taps, and the whole point of a punch is when it happened.
+    """
+    from apps.utils import now as _now
+
+    policy = PunchPolicy.get_solo()
+    if not policy.self_punch_enabled:
+        raise SelfPunchError(
+            "Punching from the website is switched off. Please use the card reader."
+        )
+
+    if latitude is None and policy.require_location:
+        raise SelfPunchError(
+            "Your location is needed for a web punch. Allow location access for this "
+            "site in your browser and try again."
+        )
+
+    status, office, distance = classify(latitude, longitude, accuracy_m, policy)
+    if status == PunchLog.LocationStatus.OUTSIDE and not policy.allow_outside_office:
+        where = f"{distance} m from {office.name}" if office else "away from the office"
+        raise SelfPunchError(
+            f"You appear to be {where}. Web punches are only allowed at the office."
+        )
+
+    when = (when or _now()).replace(microsecond=0)
+    if PunchLog.objects.filter(employee=employee, punch_time=when).exists():
+        raise SelfPunchError("That punch was already recorded. Give it a minute.")
+
+    # A punch moments after the last one is a double tap, not a real movement.
+    # The pairing engine would drop it silently, so say so instead.
+    window = timedelta(minutes=employee.effective_shift.duplicate_window_minutes
+                       if employee.effective_shift else 3)
+    recent = (PunchLog.objects.filter(employee=employee, punch_time__lt=when,
+                                      punch_time__gte=when - window)
+              .order_by("-punch_time").first())
+    if recent:
+        raise SelfPunchError(
+            f"You punched at {recent.punch_time:%I:%M %p}, less than "
+            f"{int(window.total_seconds() // 60)} minutes ago. Wait a moment before punching again."
+        )
+
+    direction = next_punch_direction(employee, when.date())
+    log = PunchLog.objects.create(
+        employee=employee,
+        punch_time=when,
+        card_no=employee.rfid_card_no or "",
+        device_user_id=employee.device_user_id or "",
+        source=PunchLog.Source.SELF,
+        is_matched=True,
+        note=note[:160],
+        latitude=latitude,
+        longitude=longitude,
+        accuracy_m=accuracy_m,
+        location_status=status,
+        office=office,
+        distance_m=distance,
+        ip_address=ip_address,
+        user_agent=(user_agent or "")[:200],
+    )
+    record = rebuild_day(employee, when.date())
+    return log, record, direction
+
+
+def punch_state(employee, day=None) -> dict:
+    """Everything the punch button needs to know right now."""
+    from apps.utils import today as _today
+
+    day = day or _today()
+    punches = list(
+        PunchLog.objects.filter(employee=employee, punch_time__date=day, is_ignored=False)
+        .order_by("punch_time")
+    )
+    record = DailyAttendance.objects.filter(employee=employee, date=day).first()
+    direction = PunchLog.Direction.IN if len(punches) % 2 == 0 else PunchLog.Direction.OUT
+    return {
+        "day": day,
+        "punches": punches,
+        "record": record,
+        "next_direction": direction,
+        "is_at_work": direction == PunchLog.Direction.OUT,
+        "first_punch": punches[0] if punches else None,
+        "last_punch": punches[-1] if punches else None,
+        "policy": PunchPolicy.get_solo(),
+    }

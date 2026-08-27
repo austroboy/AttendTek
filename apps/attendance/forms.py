@@ -8,7 +8,8 @@ from apps.utils import now as app_now, today as app_today
 from apps.accounts.forms import StyledFormMixin
 from apps.accounts.models import User
 
-from .models import DailyAttendance, Holiday, HomeOfficeEntry, Outing, PunchLog
+from .models import (DailyAttendance, Holiday, HomeOfficeEntry, OfficeLocation,
+                     Outing, PunchLog, PunchPolicy)
 
 
 class HomeOfficeStartForm(StyledFormMixin, forms.ModelForm):
@@ -150,3 +151,31 @@ class OutingAdminForm(StyledFormMixin, forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+class SelfPunchForm(forms.Form):
+    """Hidden fields the browser fills in before the punch is submitted."""
+
+    latitude = forms.DecimalField(required=False, widget=forms.HiddenInput)
+    longitude = forms.DecimalField(required=False, widget=forms.HiddenInput)
+    accuracy_m = forms.IntegerField(required=False, min_value=0, widget=forms.HiddenInput)
+    location_error = forms.CharField(required=False, widget=forms.HiddenInput)
+    note = forms.CharField(
+        required=False, max_length=160, label="Note (optional)",
+        widget=forms.TextInput(attrs={"placeholder": "e.g. at the client site"}),
+    )
+    mode = forms.CharField(required=False, widget=forms.HiddenInput)
+
+
+class OfficeLocationForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = OfficeLocation
+        fields = ["name", "latitude", "longitude", "radius_m", "address", "is_active"]
+        labels = {"radius_m": "Radius in metres"}
+
+
+class PunchPolicyForm(StyledFormMixin, forms.ModelForm):
+    class Meta:
+        model = PunchPolicy
+        fields = ["self_punch_enabled", "require_location", "allow_outside_office",
+                  "max_accuracy_m", "notice"]
