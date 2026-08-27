@@ -9,7 +9,7 @@ from django.http import HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
-from apps.utils import now as app_now, today as app_today
+from apps.utils import now as app_now, paginate, today as app_today
 
 from apps.accounts.models import Department, User
 from apps.accounts.permissions import manager_required
@@ -54,8 +54,10 @@ def monthly_sheet(request):
     lookup = {(r.employee_id, r.date): r for r in records}
     days = [first + timedelta(days=i) for i in range((last - first).days + 1)]
 
+    page = paginate(request, employees.order_by("employee_id"), per_page=20)
+
     rows = []
-    for emp in employees:
+    for emp in page.object_list:
         cells, totals = [], {"present": 0, "late": 0, "absent": 0, "leave": 0, "home": 0, "minutes": 0}
         for d in days:
             r = lookup.get((emp.id, d))
@@ -77,7 +79,7 @@ def monthly_sheet(request):
         rows.append({"employee": emp, "cells": cells, "totals": totals})
 
     return render(request, "reports/monthly_sheet.html", {
-        "rows": rows, "days": days, "year": year, "month": month,
+        "page": page, "rows": rows, "days": days, "year": year, "month": month,
         "month_label": first.strftime("%B %Y"), "dept": dept,
         "departments": Department.objects.all(),
         "prev": first - timedelta(days=1), "next": last + timedelta(days=1),
@@ -96,7 +98,8 @@ def employee_report(request):
         records = DailyAttendance.objects.filter(
             employee=employee, date__range=(first, last)).order_by("date")
         summary = month_summary(employee, year, month)
-        tasks = DailyTask.objects.filter(employee=employee, date__range=(first, last))
+        tasks = DailyTask.objects.filter(
+            employee=employee, date__range=(first, last)).order_by("-date")[:60]
     return render(request, "reports/employee_report.html", {
         "employees": employees, "employee": employee, "records": records,
         "summary": summary, "tasks": tasks, "year": year, "month": month,
@@ -119,8 +122,9 @@ def late_report(request):
                 total_short_min=Sum("shortfall_minutes"),
                 avg_worked=Avg("worked_minutes"),
             ).order_by("-late_days", "-total_late_min"))
+    page = paginate(request, rows, per_page=25)
     return render(request, "reports/late_report.html", {
-        "rows": rows, "month_label": first.strftime("%B %Y"),
+        "page": page, "rows": page.object_list, "month_label": first.strftime("%B %Y"),
         "year": year, "month": month,
     })
 
@@ -261,8 +265,10 @@ def outing_report(request):
         unstated=Count("id", filter=Q(purpose=Outing.Purpose.UNSPECIFIED)),
     )
 
+    page = paginate(request, outings, per_page=40)
     return render(request, "reports/outing_report.html", {
-        "outings": outings[:400],
+        "page": page,
+        "outings": page.object_list,
         "per_employee": per_employee,
         "totals": totals,
         "day_from": day_from, "day_to": day_to,
@@ -352,6 +358,7 @@ def task_report(request):
     tasks = tasks.order_by("-date", "employee__employee_id")
 
     summary = summarise(tasks, start, end)
+    entry_page = paginate(request, tasks, per_page=40)
     rows = employee_rows(list(employees), start, end)
     silent = [r for r in rows if r["minutes"] == 0]
 
@@ -366,6 +373,8 @@ def task_report(request):
         "prev": shift_period(kind, anchor, -1) if kind != "custom" else anchor,
         "next": shift_period(kind, anchor, 1) if kind != "custom" else anchor,
         "summary": summary,
+        "entry_page": entry_page,
+        "entries": entry_page.object_list,
         "rows": rows,
         "silent": silent,
         "reporting_count": len(rows) - len(silent),

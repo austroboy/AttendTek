@@ -6,7 +6,7 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 
 from apps.attendance.models import HomeOfficeEntry
-from apps.utils import today as app_today
+from apps.utils import paginate, today as app_today
 
 from apps.accounts.permissions import manager_required
 
@@ -30,8 +30,9 @@ def my_leaves(request):
     for lt in LeaveType.objects.all():
         taken = sum(r.total_days for r in requests_qs.filter(leave_type=lt, status="APPROVED"))
         used[lt] = {"taken": taken, "left": max(0, lt.annual_quota - taken), "quota": lt.annual_quota}
+    page = paginate(request, requests_qs, per_page=20)
     return render(request, "leaves/my_leaves.html", {
-        "form": form, "requests": requests_qs[:30], "balance": used,
+        "form": form, "page": page, "requests": page.object_list, "balance": used,
     })
 
 
@@ -79,9 +80,11 @@ def team_leaves(request):
                          .filter(date=day, status=HomeOfficeEntry.Status.APPROVED)
                          .select_related("employee"))
 
+    page = paginate(request, requests_qs, per_page=25)
     return render(request, "leaves/team_leaves.html", {
         "day": day,
-        "requests": requests_qs[:200],
+        "page": page,
+        "requests": page.object_list,
         "on_leave_today": on_leave_today,
         "upcoming": upcoming,
         "home_office_today": home_office_today,
@@ -99,8 +102,9 @@ def leave_review(request):
     qs = LeaveRequest.objects.select_related("employee", "leave_type", "reviewed_by")
     if status:
         qs = qs.filter(status=status)
+    page = paginate(request, qs, per_page=25)
     return render(request, "leaves/leave_review.html", {
-        "requests": qs[:200], "status": status,
+        "page": page, "requests": page.object_list, "status": status,
         "counts": {s: LeaveRequest.objects.filter(status=s).count()
                    for s, _ in LeaveRequest.Status.choices},
     })

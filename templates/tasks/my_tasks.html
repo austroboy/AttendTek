@@ -27,6 +27,9 @@
   <div class="card"><div class="empty"><b>No tasks logged yet</b>
     Use the form to log what you worked on today.</div></div>
   {% endfor %}
+  {% if page.paginator.num_pages > 1 %}
+    <div class="card"><div class="bd" style="padding:0">{% include "partials/_pagination.html" %}</div></div>
+  {% endif %}
 </div>
 
 <div class="card" style="align-self:start"><div class="hd"><h3>Add task</h3></div><div class="bd">

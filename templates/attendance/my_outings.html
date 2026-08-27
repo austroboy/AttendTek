@@ -65,6 +65,11 @@
   Every time you tap the reader on the way out and again on the way back, the gap shows up here.</div></div>
 {% endfor %}
 
+{% if page.paginator.num_pages > 1 %}
+  <div class="card" style="margin-bottom:14px"><div class="bd" style="padding:0">
+    {% include "partials/_pagination.html" %}</div></div>
+{% endif %}
+
 <div class="msg info">
   <b>How this works.</b> The first punch of the day is your arrival, the second is you
   leaving, the third is you coming back, and so on. Office trips still count towards your

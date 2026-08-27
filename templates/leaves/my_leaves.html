@@ -8,7 +8,7 @@
       <button class="btn primary">Submit request</button></form>
   </div></div>
 
-  <div class="card"><div class="hd"><h2>My requests gulo</h2></div><div class="bd flush"><table>
+  <div class="card"><div class="hd"><h2>My requests</h2></div><div class="bd flush"><table>
     <thead><tr><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Status</th><th>Note</th><th></th></tr></thead>
     <tbody>{% for l in requests %}<tr>
       <td>{{ l.leave_type.name }}</td>
@@ -19,7 +19,8 @@
       <td class="tiny muted">{{ l.review_note|default:"" }}</td>
       <td>{% if l.status == 'PENDING' %}<a class="tiny" href="{% url 'leaves:cancel' l.pk %}">cancel</a>{% endif %}</td>
     </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No leave requests yet</b></div></td></tr>{% endfor %}
-    </tbody></table></div></div>
+    </tbody></table>
+      {% include "partials/_pagination.html" %}</div></div>
 </div>
 <div class="card" style="align-self:start"><div class="hd"><h3>Leave balance</h3></div><div class="bd">
   {% for lt, b in balance.items %}

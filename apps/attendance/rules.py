@@ -89,8 +89,8 @@ def required_out_time(shift, day: date_cls, check_in: datetime, unpaid_minutes: 
       - 9:00 AM in  -> 6:00 PM
       - 10:02 AM in -> 7:02 PM
       - in at 9:45 AM  -> 6:45 PM  (the full 9 hours are always required)
-    Shift.extend_only_when_late = True korle grace period er bhitore
-    keeps the normal 6:00 PM end time for anyone inside the grace period.
+    Setting Shift.extend_only_when_late = True keeps the normal 6:00 PM end
+    time for anyone who arrives inside the grace period.
     """
     scheduled_out = datetime.combine(day, shift.end_time)
     late_cutoff = datetime.combine(day, shift.late_after)

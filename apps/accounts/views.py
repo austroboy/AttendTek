@@ -10,6 +10,7 @@ from apps.utils import now as app_now, today as app_today
 
 from apps.attendance.models import DailyAttendance
 from apps.attendance.services import month_summary
+from apps.utils import paginate
 
 from .forms import (CardAssignForm, DepartmentForm, DesignationForm, EmployeeForm,
                     LoginForm, ProfileForm, ShiftForm)
@@ -56,8 +57,10 @@ def employee_list(request):
         employees = employees.filter(Q(rfid_card_no__isnull=True) | Q(rfid_card_no=""))
     elif card == "assigned":
         employees = employees.exclude(Q(rfid_card_no__isnull=True) | Q(rfid_card_no=""))
+    page = paginate(request, employees.order_by("employee_id"), per_page=25)
     return render(request, "accounts/employee_list.html", {
-        "employees": employees,
+        "page": page,
+        "employees": page.object_list,
         "departments": Department.objects.all(),
         "q": q, "dept": dept, "card": card,
         "no_card_count": User.objects.filter(
@@ -130,8 +133,13 @@ def card_assign_board(request):
                 updated += 1
         messages.success(request, f"{updated} card IDs updated.")
         return redirect("accounts:card_board")
+    page = paginate(
+        request,
+        User.objects.filter(is_active=True).select_related("department").order_by("employee_id"),
+        per_page=40,
+    )
     return render(request, "accounts/card_board.html", {
-        "employees": User.objects.filter(is_active=True).select_related("department"),
+        "page": page, "employees": page.object_list,
     })
 
 

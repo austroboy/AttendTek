@@ -21,7 +21,7 @@
         {% include "partials/_tape.html" %}
         <div class="row tiny muted" style="margin-top:8px">
           <span>Office {{ shift.start_time|time:"h:i A" }} – {{ shift.end_time|time:"h:i A" }}</span>
-          <span>· Late {{ shift.late_after|time:"h:i A" }} er por</span>
+          <span>· Late after {{ shift.late_after|time:"h:i A" }}</span>
           <span>· {{ shift.required_hours }} hours required</span>
         </div>
         {% if record.remarks %}<div class="msg {% if record.is_late %}warning{% else %}info{% endif %}" style="margin-top:12px">{{ record.remarks }}</div>{% endif %}

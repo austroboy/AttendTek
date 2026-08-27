@@ -53,20 +53,32 @@ def shift_period(kind: str, anchor: date_cls, step: int) -> date_cls:
 
 
 def summarise(tasks, start: date_cls, end: date_cls) -> dict:
-    """Totals, and the same total sliced by day, project and progress."""
-    tasks = list(tasks)
-    total = sum(t.minutes_spent for t in tasks)
+    """Totals, and the same total sliced by day, project and progress.
 
-    per_day = {}
+    Every figure is worked out by the database. A month across a whole team is
+    thousands of rows, and adding them up in Python would mean loading all of
+    them into memory just to produce a handful of numbers.
+    """
+    if not hasattr(tasks, "aggregate"):        # a plain list, used by the tests
+        tasks = DailyTask.objects.filter(pk__in=[t.pk for t in tasks])
+
+    total = tasks.aggregate(total=Sum("minutes_spent"))["total"] or 0
+    task_count = tasks.count()
+
+    per_day = {
+        row["date"]: row["minutes"]
+        for row in tasks.values("date").annotate(minutes=Sum("minutes_spent"))
+    }
     per_project = {}
-    per_progress = {}
-    for t in tasks:
-        per_day[t.date] = per_day.get(t.date, 0) + t.minutes_spent
-        key = t.project.strip() or "Unassigned"
-        per_project[key] = per_project.get(key, 0) + t.minutes_spent
-        per_progress[t.get_progress_display()] = (
-            per_progress.get(t.get_progress_display(), 0) + t.minutes_spent
-        )
+    for row in tasks.values("project").annotate(minutes=Sum("minutes_spent")):
+        key = (row["project"] or "").strip() or "Unassigned"
+        per_project[key] = per_project.get(key, 0) + row["minutes"]
+
+    labels = dict(DailyTask.Progress.choices)
+    per_progress = {
+        labels.get(row["progress"], row["progress"]): row["minutes"]
+        for row in tasks.values("progress").annotate(minutes=Sum("minutes_spent"))
+    }
 
     days = []
     cursor = start
@@ -83,7 +95,7 @@ def summarise(tasks, start: date_cls, end: date_cls) -> dict:
     logged_days = sum(1 for d in days if d["is_logged"])
     return {
         "tasks": tasks,
-        "task_count": len(tasks),
+        "task_count": task_count,
         "total_minutes": total,
         "total_display": DailyTask.format_minutes(total),
         "days": days,

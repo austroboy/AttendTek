@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.contrib import messages
+from django.db.models import Count, Sum
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,6 +13,8 @@ from apps.accounts.permissions import manager_required
 
 from .forms import DailyTaskForm
 from .models import DailyTask
+from apps.utils import paginate
+
 from .services import (PERIODS, attendance_minutes, coverage, period_bounds,
                        shift_period, summarise)
 
@@ -27,25 +30,27 @@ def my_tasks(request):
         messages.success(request, "Task saved.")
         return redirect("tasks:my_tasks")
 
-    tasks = DailyTask.objects.filter(employee=me)[:120]
-    grouped = {}
-    for t in tasks:
-        grouped.setdefault(t.date, []).append(t)
+    all_tasks = DailyTask.objects.filter(employee=me).order_by("-date", "-created_at")
+    # Totals are counted in the database over everything, not just this page.
+    totals = all_tasks.aggregate(minutes=Sum("minutes_spent"), count=Count("id"))
+    page = paginate(request, all_tasks, per_page=25)
 
     # Each day gets its own total, so the employee can see whether what they
     # logged lines up with the hours they were actually at work.
-    days = []
-    for day, items in sorted(grouped.items(), reverse=True):
-        minutes = sum(t.minutes_spent for t in items)
-        days.append({"date": day, "tasks": items, "minutes": minutes,
-                     "total": DailyTask.format_minutes(minutes)})
+    grouped = {}
+    for t in page.object_list:
+        grouped.setdefault(t.date, []).append(t)
+    days = [{"date": d, "tasks": items,
+             "minutes": sum(t.minutes_spent for t in items),
+             "total": DailyTask.format_minutes(sum(t.minutes_spent for t in items))}
+            for d, items in grouped.items()]
 
-    total = sum(t.minutes_spent for t in tasks)
     return render(request, "tasks/my_tasks.html", {
         "form": form,
+        "page": page,
         "days": days,
-        "total_logged": DailyTask.format_minutes(total),
-        "task_count": len(tasks),
+        "total_logged": DailyTask.format_minutes(totals["minutes"] or 0),
+        "task_count": totals["count"] or 0,
     })
 
 

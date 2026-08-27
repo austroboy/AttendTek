@@ -20,3 +20,19 @@ def nav_active(context, *view_names):
         return ""
     current = match.view_name  # e.g. "accounts:employee_detail"
     return "active" if current in view_names else ""
+
+
+@register.simple_tag(takes_context=True)
+def page_url(context, page_number):
+    """A link to another page that keeps every filter already applied.
+
+    Without this, paging through a filtered report silently drops the filters
+    and the person is looking at different data than they think.
+    """
+    request = context.get("request")
+    params = request.GET.copy() if request else {}
+    try:
+        params["page"] = page_number
+        return f"?{params.urlencode()}"
+    except AttributeError:
+        return f"?page={page_number}"

@@ -42,4 +42,5 @@
   <td><a class="tiny" href="{% url 'attendance:record_edit' r.pk %}">edit</a></td>
 </tr>{% empty %}<tr><td colspan="13"><div class="empty"><b>No records</b>Try a different date range or filter.</div></td></tr>{% endfor %}
 </tbody></table></div></div></div>
+{% include "partials/_pagination.html" %}
 {% endblock %}

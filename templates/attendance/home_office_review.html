@@ -30,5 +30,6 @@
   {% endif %}
   {% if h.reviewed_by %}<div class="tiny muted">{{ h.reviewed_by.display_name }}</div>{% endif %}</td>
 </tr>{% empty %}<tr><td colspan="8"><div class="empty"><b>No requests</b></div></td></tr>{% endfor %}
-</tbody></table></div></div>
+</tbody></table></div>
+{% include "partials/_pagination.html" %}</div>
 {% endblock %}

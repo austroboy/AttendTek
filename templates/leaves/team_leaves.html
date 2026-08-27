@@ -58,7 +58,8 @@
             Nothing matches these filters yet.</div></td></tr>
         {% endfor %}
         </tbody>
-      </table></div></div>
+      </table></div>
+      {% include "partials/_pagination.html" %}</div>
     </div>
 
     {% if not can_approve %}

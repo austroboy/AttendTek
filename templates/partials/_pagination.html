@@ -1,0 +1,27 @@
+{% load nav %}
+{% if page.paginator.num_pages > 1 %}
+<div class="pager">
+  {% if page.has_previous %}
+    <a class="btn sm" href="{% page_url 1 %}">« First</a>
+    <a class="btn sm" href="{% page_url page.previous_page_number %}">‹ Previous</a>
+  {% else %}
+    <span class="btn sm" aria-disabled="true" style="opacity:.4">« First</span>
+    <span class="btn sm" aria-disabled="true" style="opacity:.4">‹ Previous</span>
+  {% endif %}
+
+  <span class="pager-info mono">
+    Page {{ page.number }} of {{ page.paginator.num_pages }}
+    <span class="muted">· {{ page.paginator.count }} row{{ page.paginator.count|pluralize }}</span>
+  </span>
+
+  {% if page.has_next %}
+    <a class="btn sm" href="{% page_url page.next_page_number %}">Next ›</a>
+    <a class="btn sm" href="{% page_url page.paginator.num_pages %}">Last »</a>
+  {% else %}
+    <span class="btn sm" aria-disabled="true" style="opacity:.4">Next ›</span>
+    <span class="btn sm" aria-disabled="true" style="opacity:.4">Last »</span>
+  {% endif %}
+</div>
+{% elif page.paginator.count %}
+<div class="pager"><span class="pager-info mono muted">{{ page.paginator.count }} row{{ page.paginator.count|pluralize }}</span></div>
+{% endif %}

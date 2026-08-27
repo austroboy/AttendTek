@@ -363,3 +363,72 @@ class SelfPunchTests(TestCase):
             self_punch(self.emp, latitude="23.780650", longitude="90.416520",
                        accuracy_m=20, when=when + timedelta(seconds=30))
         self.assertIn("minutes ago", str(caught.exception))
+
+
+class PaginationTests(TestCase):
+    """Long lists are served a page at a time."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), is_default=True, weekend_days="4,5",
+        )
+        cls.admin = User.objects.create_user(
+            username="chief", password="pw", employee_id="EMP-050",
+            role=User.Role.ADMIN, shift=cls.shift, is_attendance_tracked=False,
+        )
+        cls.emp = User.objects.create_user(
+            username="worker", password="pw", employee_id="EMP-051", shift=cls.shift
+        )
+        # 120 punches spread over one day, well past a single page.
+        base = datetime.combine(DAY, time(8, 0))
+        PunchLog.objects.bulk_create([
+            PunchLog(employee=cls.emp, punch_time=base + timedelta(minutes=i * 5),
+                     source=PunchLog.Source.MANUAL)
+            for i in range(120)
+        ])
+
+    def test_punch_log_page_is_capped(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/attendance/punches/?date={DAY:%Y-%m-%d}")
+        page = response.context["page"]
+        self.assertEqual(page.paginator.count, 120)
+        self.assertEqual(len(page.object_list), 50)
+        self.assertTrue(page.has_next())
+
+    def test_second_page_has_the_rest(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/attendance/punches/?date={DAY:%Y-%m-%d}&page=3")
+        self.assertEqual(response.context["page"].number, 3)
+        self.assertEqual(len(response.context["page"].object_list), 20)
+
+    def test_out_of_range_page_falls_back_to_the_first(self):
+        """A stale bookmark should show data, not a 404."""
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/attendance/punches/?date={DAY:%Y-%m-%d}&page=999")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["page"].number, 1)
+
+    def test_junk_page_number_is_survivable(self):
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/attendance/punches/?date={DAY:%Y-%m-%d}&page=abc")
+        self.assertEqual(response.status_code, 200)
+
+    def test_per_page_is_clamped(self):
+        """Nobody can ask for ten thousand rows in one request."""
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/attendance/punches/?date={DAY:%Y-%m-%d}&per_page=100000")
+        self.assertEqual(len(response.context["page"].object_list), 120)
+        self.assertEqual(response.context["page"].paginator.per_page, 200)
+
+    def test_filters_survive_paging(self):
+        """Totals are for the whole filtered set, not just the page shown."""
+        for i in range(60):
+            rebuild_day(self.emp, DAY - timedelta(days=i % 30))
+        self.client.force_login(self.admin)
+        response = self.client.get("/attendance/sheet/?from=2026-01-01&to=2026-12-31&page=2")
+        self.assertEqual(response.status_code, 200)
+        totals = response.context["totals"]
+        page = response.context["page"]
+        self.assertEqual(totals["rows"], page.paginator.count)

@@ -15,4 +15,6 @@ Once assigned, any punch from that card is recorded against this employee.</div>
   </tr>{% endfor %}</tbody></table></div></div></div>
   {% csrf_token %}
 </form>
+{% include "partials/_pagination.html" %}
+<p class="tiny muted">Card IDs are saved one page at a time — press <b>Save all</b> before moving to the next page.</p>
 {% endblock %}

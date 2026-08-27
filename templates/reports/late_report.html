@@ -20,5 +20,6 @@
   <td class="mono">{{ r.total_short_min|default:0 }}</td>
   <td class="mono small">{{ r.avg_worked|floatformat:0 }}m</td>
 </tr>{% empty %}<tr><td colspan="9"><div class="empty"><b>No data</b></div></td></tr>{% endfor %}
-</tbody></table></div></div></div>
+</tbody></table></div>
+{% include "partials/_pagination.html" %}</div></div>
 {% endblock %}

@@ -22,4 +22,5 @@
   {% else %}<span class="tiny muted">{{ l.reviewed_by.display_name|default:"" }}</span>{% endif %}</td>
 </tr>{% empty %}<tr><td colspan="8"><div class="empty"><b>No requests</b></div></td></tr>{% endfor %}
 </tbody></table></div></div></div>
+{% include "partials/_pagination.html" %}
 {% endblock %}

@@ -88,7 +88,7 @@
       <span class="right tiny muted">newest first</span></div>
       <div class="bd flush"><div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>Employee</th><th>Task</th><th>Project</th><th>Time</th><th>Progress</th></tr></thead>
-        <tbody>{% for t in summary.tasks|slice:":300" %}<tr>
+        <tbody>{% for t in entries %}<tr>
           <td class="mono small">{{ t.date|date:"d M" }}</td>
           <td class="small">{{ t.employee.display_name }}</td>
           <td><b>{{ t.title }}</b>{% if t.details %}<div class="tiny muted">{{ t.details|truncatechars:60 }}</div>{% endif %}</td>
@@ -98,7 +98,8 @@
         </tr>{% empty %}
           <tr><td colspan="6"><div class="empty"><b>Nothing logged in this period</b></div></td></tr>
         {% endfor %}</tbody>
-      </table></div></div>
+      </table></div>
+      {% include "partials/_pagination.html" with page=entry_page %}</div>
     </div>
   </div>
 

@@ -3,11 +3,11 @@ from datetime import date as date_cls, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from apps.utils import now as app_now, today as app_today
+from apps.utils import now as app_now, paginate, today as app_today
 
 from apps.accounts.models import Department, User
 from apps.accounts.permissions import manager_required
@@ -98,19 +98,25 @@ def attendance_sheet(request):
     if emp_id:
         qs = qs.filter(employee_id=emp_id)
 
+    # Totals come from the database over the whole range; only the rows shown
+    # on screen are actually loaded.
+    totals = {
+        "rows": qs.count(),
+        "late": qs.filter(is_late=True).count(),
+        "early": qs.filter(is_early_out=True).count(),
+        "absent": qs.filter(status=DailyAttendance.Status.ABSENT).count(),
+    }
+    page = paginate(request, qs, per_page=50)
+
     return render(request, "attendance/attendance_sheet.html", {
-        "records": qs[:600],
+        "page": page,
+        "records": page.object_list,
         "day_from": day_from, "day_to": day_to,
         "status": status, "dept": dept, "emp_id": emp_id,
         "statuses": DailyAttendance.Status.choices,
         "departments": Department.objects.all(),
         "employees": User.objects.active_staff(),
-        "totals": {
-            "rows": qs.count(),
-            "late": qs.filter(is_late=True).count(),
-            "early": qs.filter(is_early_out=True).count(),
-            "absent": qs.filter(status=DailyAttendance.Status.ABSENT).count(),
-        },
+        "totals": totals,
     })
 
 
@@ -158,8 +164,9 @@ def punch_log_list(request):
         )
         messages.success(request, "Punch added." if created else "A punch already exists at that time.")
         return redirect(f"{request.path}?date={form.cleaned_data['punch_date']}")
+    page = paginate(request, logs.order_by("punch_time"), per_page=50)
     return render(request, "attendance/punch_logs.html", {
-        "logs": logs.order_by("punch_time"), "day": day, "form": form, "show": show,
+        "page": page, "logs": page.object_list, "day": day, "form": form, "show": show,
         "unmatched_total": PunchLog.objects.filter(is_matched=False).count(),
         "source": source,
         "sources": PunchLog.Source.choices,
@@ -201,8 +208,10 @@ def home_office_review(request):
     entries = HomeOfficeEntry.objects.select_related("employee")
     if status:
         entries = entries.filter(status=status)
+    page = paginate(request, entries, per_page=30)
     return render(request, "attendance/home_office_review.html", {
-        "entries": entries, "status": status, "form": HomeOfficeReviewForm(),
+        "page": page, "entries": page.object_list, "status": status,
+        "form": HomeOfficeReviewForm(),
     })
 
 
@@ -387,6 +396,8 @@ def my_outings(request):
 
     outings = (Outing.objects.filter(employee=me, date__range=(day_from, day_to))
                .select_related("day").order_by("-date", "left_at"))
+    totals = outings.aggregate(count=Count("id"), minutes=Sum("minutes"))
+    pending_count = outings.filter(purpose=Outing.Purpose.UNSPECIFIED).count()
 
     if request.method == "POST":
         outing = get_object_or_404(Outing, pk=request.POST.get("outing_id"), employee=me)
@@ -399,23 +410,21 @@ def my_outings(request):
             messages.error(request, "Please choose a purpose before saving.")
         return redirect(f"{request.path}?from={day_from}&to={day_to}")
 
-    grouped = {}
-    for o in outings:
-        grouped.setdefault(o.date, []).append(o)
+    page = paginate(request, outings, per_page=20)
 
-    rows = [
-        {"date": d, "outings": items,
-         "forms": [OutingForm(instance=o, prefix=f"o{o.pk}") for o in items],
-         "total": sum(o.minutes for o in items)}
-        for d, items in grouped.items()
-    ]
+    grouped = {}
+    for o in page.object_list:
+        grouped.setdefault(o.date, []).append(o)
+    rows = [{"date": d, "outings": items, "total": sum(o.minutes for o in items)}
+            for d, items in grouped.items()]
 
     return render(request, "attendance/my_outings.html", {
+        "page": page,
         "rows": rows,
         "day_from": day_from, "day_to": day_to,
-        "pending": outings.filter(purpose=Outing.Purpose.UNSPECIFIED).count(),
-        "total_minutes": sum(o.minutes for o in outings),
-        "trip_count": outings.count(),
+        "pending": pending_count,
+        "total_minutes": totals["minutes"] or 0,
+        "trip_count": totals["count"] or 0,
     })
 
 

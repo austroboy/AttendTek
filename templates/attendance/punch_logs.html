@@ -36,6 +36,7 @@
       <td class="tiny muted">{{ l.note|truncatechars:40 }}</td>
     </tr>{% empty %}<tr><td colspan="7"><div class="empty"><b>No punches on this day</b>Sync the device to pull them in.</div></td></tr>{% endfor %}
     </tbody></table></div></div></div>
+{% include "partials/_pagination.html" %}
 </div>
 <div class="card" style="align-self:start"><div class="hd"><h3>Manual punch</h3></div><div class="bd">
   <p class="tiny muted" style="margin-top:0">If someone forgot their card or the device failed, add the punch by hand.</p>
