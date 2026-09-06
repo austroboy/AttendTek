@@ -164,3 +164,193 @@ class ProfileTests(TestCase):
         response = self.client.get("/attendance/me/")
         self.assertContains(response, 'href="/accounts/profile/"')
         self.assertContains(response, "me-card")
+
+
+class OffboardingTests(TestCase):
+    """Someone leaving must lose access without losing their history."""
+
+    def setUp(self):
+        self.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), is_default=True, weekend_days="4,5",
+        )
+        self.admin = User.objects.create_user(
+            username="hrhead", password="pw", employee_id="EMP-080",
+            role=User.Role.ADMIN, shift=self.shift, is_attendance_tracked=False,
+        )
+        self.emp = User.objects.create_user(
+            username="leaver", password="LeavePass123", employee_id="EMP-081",
+            first_name="Sumaiya", last_name="Rahman", shift=self.shift,
+            rfid_card_no="70001", joining_date=date(2025, 1, 6),
+        )
+
+    # ---------- the service ----------
+    def sign_in(self, username="leaver", password="LeavePass123"):
+        """Go through the real login page, the way a person would."""
+        return self.client.post("/accounts/login/",
+                                {"username": username, "password": password}, follow=True)
+
+    def test_deactivation_blocks_login(self):
+        from .offboarding import deactivate_employee
+
+        response = self.sign_in()
+        self.assertTrue(response.context["user"].is_authenticated)
+        self.client.logout()
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31),
+                            reason="RESIGNED")
+        response = self.sign_in()
+        self.assertFalse(response.context["user"].is_authenticated)
+
+    def test_a_deactivated_account_cannot_reach_any_page(self):
+        """Belt and braces: even a session made another way is stopped."""
+        from .offboarding import deactivate_employee
+
+        self.client.force_login(self.emp)
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        self.emp.refresh_from_db()
+
+        self.client.force_login(self.emp)          # as if a session survived
+        response = self.client.get("/attendance/me/", follow=True)
+        self.assertIn("/accounts/login/", response.redirect_chain[-1][0])
+
+    def test_open_session_is_ended_immediately(self):
+        """The real gap: Django keeps an existing session alive on its own."""
+        from .offboarding import deactivate_employee
+
+        self.client.login(username="leaver", password="LeavePass123")
+        self.assertEqual(self.client.get("/attendance/me/").status_code, 200)
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+
+        response = self.client.get("/attendance/me/", follow=True)
+        self.assertIn("/accounts/login/", response.redirect_chain[-1][0])
+
+    def test_history_is_kept(self):
+        from apps.attendance.models import DailyAttendance
+        from apps.tasks.models import DailyTask
+        from .offboarding import deactivate_employee
+
+        DailyAttendance.objects.create(employee=self.emp, date=date(2026, 8, 20),
+                                       shift=self.shift, status="PRESENT")
+        DailyTask.objects.create(employee=self.emp, date=date(2026, 8, 20),
+                                 title="Handover", minutes_spent=120)
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+
+        self.assertTrue(DailyAttendance.objects.filter(employee=self.emp).exists())
+        self.assertTrue(DailyTask.objects.filter(employee=self.emp).exists())
+        self.assertTrue(User.objects.filter(pk=self.emp.pk).exists())
+
+    def test_no_absences_pile_up_after_the_last_working_day(self):
+        from apps.attendance.models import DailyAttendance
+        from apps.attendance.services import mark_absentees
+        from .offboarding import deactivate_employee
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        mark_absentees(date(2026, 9, 7))          # a Monday after they left
+        self.assertFalse(
+            DailyAttendance.objects.filter(employee=self.emp, date=date(2026, 9, 7)).exists())
+
+    def test_future_empty_days_are_cleared_on_exit(self):
+        from apps.attendance.models import DailyAttendance
+        from .offboarding import deactivate_employee
+
+        DailyAttendance.objects.create(employee=self.emp, date=date(2026, 9, 10),
+                                       shift=self.shift, status="ABSENT")
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        self.assertFalse(
+            DailyAttendance.objects.filter(employee=self.emp, date=date(2026, 9, 10)).exists())
+
+    def test_a_day_with_a_real_punch_after_the_exit_date_is_left_alone(self):
+        """Never quietly delete evidence that somebody was actually there."""
+        from datetime import datetime
+        from apps.attendance.models import DailyAttendance
+        from .offboarding import deactivate_employee
+
+        DailyAttendance.objects.create(
+            employee=self.emp, date=date(2026, 9, 2), shift=self.shift,
+            check_in=datetime(2026, 9, 2, 9, 5), status="PRESENT")
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        self.assertTrue(
+            DailyAttendance.objects.filter(employee=self.emp, date=date(2026, 9, 2)).exists())
+
+    def test_pending_requests_are_cancelled(self):
+        from apps.leaves.models import LeaveRequest, LeaveType
+        from .offboarding import deactivate_employee
+
+        leave_type = LeaveType.objects.create(name="Casual Leave", annual_quota=10)
+        request = LeaveRequest.objects.create(
+            employee=self.emp, leave_type=leave_type, start_date=date(2026, 9, 10),
+            end_date=date(2026, 9, 11), reason="Trip")
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        request.refresh_from_db()
+        self.assertEqual(request.status, LeaveRequest.Status.CANCELLED)
+
+    def test_they_drop_out_of_active_staff(self):
+        from .offboarding import deactivate_employee
+
+        self.assertIn(self.emp, User.objects.active_staff())
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        self.assertNotIn(self.emp, User.objects.active_staff())
+        self.assertIn(self.emp, User.objects.former())
+
+    def test_counts_on_respects_both_ends_of_employment(self):
+        self.emp.exit_date = date(2026, 8, 31)
+        self.assertFalse(self.emp.counts_on(date(2024, 12, 1)))   # before joining
+        self.assertTrue(self.emp.counts_on(date(2026, 8, 20)))
+        self.assertFalse(self.emp.counts_on(date(2026, 9, 1)))    # after leaving
+
+    def test_reactivation_restores_access(self):
+        from .offboarding import deactivate_employee, reactivate_employee
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        reactivate_employee(self.emp, by=self.admin)
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.is_active)
+        self.assertIsNone(self.emp.exit_date)
+        response = self.sign_in()
+        self.assertTrue(response.context["user"].is_authenticated)
+
+    # ---------- the screens ----------
+    def test_admin_can_deactivate_from_the_page(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(f"/accounts/employees/{self.emp.pk}/deactivate/", {
+            "exit_date": "2026-08-31", "reason": "RESIGNED",
+            "note": "Moved abroad", "cancel_pending": "on", "confirm": "on",
+        }, follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.emp.refresh_from_db()
+        self.assertFalse(self.emp.is_active)
+        self.assertEqual(self.emp.exit_reason, "RESIGNED")
+        self.assertEqual(self.emp.deactivated_by, self.admin)
+
+    def test_the_confirm_box_is_required(self):
+        self.client.force_login(self.admin)
+        self.client.post(f"/accounts/employees/{self.emp.pk}/deactivate/", {
+            "exit_date": "2026-08-31", "reason": "RESIGNED", "note": "",
+        })
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.is_active)
+
+    def test_an_admin_cannot_deactivate_themselves(self):
+        self.client.force_login(self.admin)
+        self.client.post(f"/accounts/employees/{self.admin.pk}/deactivate/", {
+            "exit_date": "2026-08-31", "reason": "OTHER", "confirm": "on",
+        }, follow=True)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_an_employee_cannot_deactivate_anybody(self):
+        self.client.force_login(self.emp)
+        response = self.client.get(f"/accounts/employees/{self.admin.pk}/deactivate/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_deactivated_login_says_why(self):
+        from .offboarding import deactivate_employee
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        response = self.client.post("/accounts/login/",
+                                    {"username": "leaver", "password": "LeavePass123"})
+        self.assertContains(response, "deactivated")

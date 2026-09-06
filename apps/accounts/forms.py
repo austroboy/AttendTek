@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import (AuthenticationForm, PasswordChangeForm,
                                        UserCreationForm)
 
-from .models import Department, Designation, Shift, User
+from .models import Department, Designation, ExitReason, Shift, User
 
 INPUT = "field"
 
@@ -30,6 +30,14 @@ class StyledFormMixin:
 
 class LoginForm(StyledFormMixin, AuthenticationForm):
     username = forms.CharField(label="Employee ID or username")
+
+    error_messages = dict(
+        AuthenticationForm.error_messages,
+        inactive=(
+            "This account has been deactivated. If you think that is a mistake, "
+            "please contact your office admin."
+        ),
+    )
 
 
 class EmployeeForm(StyledFormMixin, forms.ModelForm):
@@ -173,3 +181,30 @@ class ShiftForm(StyledFormMixin, forms.ModelForm):
             "end_time": forms.TimeInput(attrs={"type": "time"}),
             "late_after": forms.TimeInput(attrs={"type": "time"}),
         }
+
+
+class DeactivateEmployeeForm(StyledFormMixin, forms.Form):
+    """What an admin records when somebody leaves."""
+
+    exit_date = forms.DateField(
+        label="Last working day",
+        widget=forms.DateInput(attrs={"type": "date"}),
+        help_text="Attendance is counted up to and including this day.",
+    )
+    reason = forms.ChoiceField(label="Reason", choices=ExitReason.choices)
+    note = forms.CharField(
+        label="Note (optional)", required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "placeholder": "Handover notes, anything worth recording"}),
+    )
+    cancel_pending = forms.BooleanField(
+        required=False, initial=True,
+        label="Cancel their pending leave and home office requests",
+    )
+    confirm = forms.BooleanField(
+        label="I understand this signs them out immediately and blocks their login",
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.utils import today
+        self.fields["exit_date"].initial = today()

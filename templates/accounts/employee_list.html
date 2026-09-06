@@ -1,8 +1,15 @@
 {% extends "base.html" %}{% block title %}Employees{% endblock %}
 {% block eyebrow %}People{% endblock %}{% block heading %}Employees{% endblock %}
 {% block content %}
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm {% if status == 'active' %}dark{% endif %}" href="?status=active">Active ({{ active_count }})</a>
+  <a class="btn sm {% if status == 'former' %}dark{% endif %}" href="?status=former">Former ({{ former_count }})</a>
+  <a class="btn sm {% if status == 'all' %}dark{% endif %}" href="?status=all">All</a>
+</div>
+
 <div class="card" style="margin-bottom:14px"><div class="bd">
   <form method="get" class="filters">
+    <input type="hidden" name="status" value="{{ status }}">
     <div class="fgroup"><label>Search</label><input class="field" name="q" value="{{ q }}" placeholder="Name, employee ID or card no"></div>
     <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
       {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
@@ -18,7 +25,7 @@
   <a href="{% url 'accounts:card_board' %}">Assign cards →</a></div>{% endif %}
 
 <div class="card"><div class="bd flush"><div class="table-wrap"><table>
-  <thead><tr><th>Employee</th><th>Department</th><th>RFID card ID</th><th>Device user ID</th><th>Shift</th><th>Policy</th><th></th></tr></thead>
+  <thead><tr><th>Employee</th><th>Department</th><th>RFID card ID</th><th>Device user ID</th><th>Shift</th><th>Status</th><th></th></tr></thead>
   <tbody>{% for e in employees %}
     <tr>
       <td><div class="emp">{% include "partials/_avatar.html" with person=e %}<div>
@@ -28,7 +35,8 @@
           {% else %}<span class="badge bad">no card</span>{% endif %}</td>
       <td class="mono small">{{ e.device_user_id|default:"—" }}</td>
       <td class="small">{{ e.shift.name|default:"default" }}</td>
-      <td><span class="badge {% if e.work_policy == 'OFFICE' %}muted{% else %}info{% endif %}">{{ e.get_work_policy_display }}</span></td>
+      <td><span class="badge {{ e.status_badge }}">{{ e.employment_status }}</span>
+        {% if e.exit_date %}<div class="tiny muted">left {{ e.exit_date|date:"d M Y" }}</div>{% endif %}</td>
       <td><a class="btn sm" href="{% url 'accounts:employee_detail' e.pk %}">Details</a></td>
     </tr>
   {% empty %}<tr><td colspan="7"><div class="empty"><b>No employees found</b>Try changing the filters.</div></td></tr>{% endfor %}

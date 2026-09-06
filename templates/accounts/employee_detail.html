@@ -12,12 +12,33 @@
         <span class="badge {% if employee.rfid_card_no %}ok{% else %}warn{% endif %}">
           {% if employee.rfid_card_no %}Card {{ employee.rfid_card_no }}{% else %}No card{% endif %}</span>
         <span class="badge {% if employee.work_policy == 'OFFICE' %}muted{% else %}info{% endif %}">{{ employee.get_work_policy_display }}</span>
-        {% if not employee.is_active %}<span class="badge bad">Inactive</span>{% endif %}
+        <span class="badge {{ employee.status_badge }}">{{ employee.employment_status }}</span>
       </div>
     </div>
-    <a class="btn" href="{% url 'accounts:employee_edit' employee.pk %}">Edit</a>
+    <div class="row" style="gap:8px">
+      <a class="btn" href="{% url 'accounts:employee_edit' employee.pk %}">Edit</a>
+      {% if employee.is_active %}
+        {% if employee != user %}
+          <a class="btn danger" href="{% url 'accounts:employee_deactivate' employee.pk %}">Deactivate</a>
+        {% endif %}
+      {% else %}
+        <form method="post" action="{% url 'accounts:employee_reactivate' employee.pk %}"
+              onsubmit="return confirm('Turn this account back on and start counting attendance again?')">
+          {% csrf_token %}<button class="btn ok">Reactivate</button></form>
+      {% endif %}
+    </div>
   </div>
 </div></div>
+{% if not employee.is_active %}
+<div class="msg warning">
+  <b>{{ employee.display_name }} has left.</b>
+  Last working day {{ employee.exit_date|date:"d M Y" }}{% if employee.exit_reason %} · {{ employee.get_exit_reason_display }}{% endif %}{% if employee.deactivated_by %} · deactivated by {{ employee.deactivated_by.display_name }}{% endif %}{% if employee.deactivated_at %} on {{ employee.deactivated_at|date:"d M Y" }}{% endif %}.
+  {% if employee.exit_note %}<div style="margin-top:6px">{{ employee.exit_note }}</div>{% endif %}
+  <div style="margin-top:6px">Their login is blocked and attendance is no longer counted. The
+    records below are kept for payroll and reference.</div>
+</div>
+{% endif %}
+
 <div class="grid g-side"><div class="stack">
   <div class="card"><div class="hd"><h2>This month</h2>
     <a class="right btn sm" href="{% url 'reports:employee' %}?employee={{ employee.pk }}">Full report</a></div>

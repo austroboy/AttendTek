@@ -12,9 +12,11 @@ from apps.attendance.models import DailyAttendance
 from apps.attendance.services import month_summary
 from apps.utils import paginate
 
-from .forms import (CardAssignForm, ChangePasswordForm, DepartmentForm,
-                    DesignationForm, EmployeeForm, LoginForm, ProfileForm, ShiftForm)
+from .forms import (CardAssignForm, ChangePasswordForm, DeactivateEmployeeForm,
+                    DepartmentForm, DesignationForm, EmployeeForm, LoginForm,
+                    ProfileForm, ShiftForm)
 from .models import Department, Designation, Shift, User
+from .offboarding import deactivate_employee, reactivate_employee
 from .permissions import manager_required
 
 
@@ -44,7 +46,12 @@ def employee_list(request):
     q = request.GET.get("q", "").strip()
     dept = request.GET.get("dept", "")
     card = request.GET.get("card", "")
+    status = request.GET.get("status", "active")
     employees = User.objects.select_related("department", "designation", "shift")
+    if status == "active":
+        employees = employees.filter(is_active=True)
+    elif status == "former":
+        employees = employees.filter(is_active=False)
     if q:
         employees = employees.filter(
             Q(first_name__icontains=q) | Q(last_name__icontains=q)
@@ -62,7 +69,9 @@ def employee_list(request):
         "page": page,
         "employees": page.object_list,
         "departments": Department.objects.all(),
-        "q": q, "dept": dept, "card": card,
+        "q": q, "dept": dept, "card": card, "status": status,
+        "active_count": User.objects.filter(is_active=True).count(),
+        "former_count": User.objects.filter(is_active=False).count(),
         "no_card_count": User.objects.filter(
             is_active=True).filter(Q(rfid_card_no__isnull=True) | Q(rfid_card_no="")).count(),
     })
@@ -107,6 +116,57 @@ def employee_detail(request, pk):
         "recent_tasks": emp.daily_tasks.all()[:8],
         "leaves": emp.leave_requests.all()[:5],
     })
+
+
+@manager_required
+def employee_deactivate(request, pk):
+    """Record that someone has left and close their access."""
+    emp = get_object_or_404(User, pk=pk)
+
+    if not emp.is_active:
+        messages.info(request, f"{emp.display_name} is already deactivated.")
+        return redirect("accounts:employee_detail", pk=emp.pk)
+
+    if emp == request.user:
+        messages.error(request, "You cannot deactivate your own account.")
+        return redirect("accounts:employee_detail", pk=emp.pk)
+
+    form = DeactivateEmployeeForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        result = deactivate_employee(
+            emp,
+            by=request.user,
+            exit_date=form.cleaned_data["exit_date"],
+            reason=form.cleaned_data["reason"],
+            note=form.cleaned_data["note"],
+            cancel_pending=form.cleaned_data["cancel_pending"],
+        )
+        messages.success(
+            request,
+            f"{emp.display_name} has been deactivated. "
+            f"{result['sessions_ended']} open session(s) ended, "
+            f"{result['future_days_removed']} future attendance day(s) cleared.",
+        )
+        return redirect("accounts:employee_detail", pk=emp.pk)
+
+    return render(request, "accounts/employee_deactivate.html", {
+        "form": form,
+        "employee": emp,
+        "pending_leaves": emp.leave_requests.filter(status="PENDING").count(),
+    })
+
+
+@manager_required
+def employee_reactivate(request, pk):
+    """Bring someone back - a rejoin, or an undo."""
+    emp = get_object_or_404(User, pk=pk)
+    if request.method == "POST":
+        reactivate_employee(emp, by=request.user)
+        messages.success(
+            request,
+            f"{emp.display_name} is active again. Attendance will be counted from today.",
+        )
+    return redirect("accounts:employee_detail", pk=emp.pk)
 
 
 @manager_required

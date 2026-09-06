@@ -43,6 +43,8 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Ends the session of anyone deactivated while they were signed in.
+    "apps.accounts.middleware.DeactivatedUserMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -129,6 +131,11 @@ else:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
+
+# Lets a deactivated person reach the "your account is deactivated" message
+# instead of the misleading "wrong username or password". They still cannot
+# sign in - the form refuses them - but they are told why.
+AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.AllowAllUsersModelBackend"]
 
 LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "/"

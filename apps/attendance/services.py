@@ -56,6 +56,11 @@ def rebuild_day(employee: User, day: date_cls) -> DailyAttendance | None:
     shift = employee.effective_shift
     if shift is None:
         return None
+    # Before joining or after the last working day there is nothing to count.
+    if not employee.counts_on(day):
+        DailyAttendance.objects.filter(
+            employee=employee, date=day, check_in__isnull=True).delete()
+        return None
 
     record, _ = DailyAttendance.objects.get_or_create(
         employee=employee, date=day, defaults={"shift": shift}
@@ -195,7 +200,7 @@ def rebuild_range(day_from: date_cls, day_to: date_cls, employees=None) -> int:
     day = day_from
     while day <= day_to:
         for emp in employees:
-            if emp.joining_date and day < emp.joining_date:
+            if not emp.counts_on(day):
                 continue
             rebuild_day(emp, day)
             count += 1
@@ -207,7 +212,7 @@ def mark_absentees(day: date_cls) -> int:
     """Mark employees with no record for the day as absent / weekend / holiday."""
     created = 0
     for emp in User.objects.active_staff():
-        if emp.joining_date and day < emp.joining_date:
+        if not emp.counts_on(day):
             continue
         if not DailyAttendance.objects.filter(employee=emp, date=day).exists():
             rebuild_day(emp, day)

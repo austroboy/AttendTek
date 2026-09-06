@@ -118,11 +118,24 @@ class UserQuerySet(models.QuerySet):
         return self.filter(is_active=True).exclude(role=User.Role.ADMIN)
 
     def active_staff(self):
+        """People whose attendance is still being counted."""
         return self.filter(is_active=True, is_attendance_tracked=True)
+
+    def former(self):
+        """People who have left. Their history stays; their access does not."""
+        return self.filter(is_active=False)
 
 
 class UserManager(DjangoUserManager.from_queryset(UserQuerySet)):
     """Django's create_user/createsuperuser plus our custom queryset."""
+
+
+class ExitReason(models.TextChoices):
+    RESIGNED = "RESIGNED", "Resigned"
+    TERMINATED = "TERMINATED", "Terminated"
+    CONTRACT_END = "CONTRACT_END", "Contract ended"
+    RETIRED = "RETIRED", "Retired"
+    OTHER = "OTHER", "Other"
 
 
 class User(AbstractUser):
@@ -164,6 +177,20 @@ class User(AbstractUser):
     work_policy = models.CharField(max_length=10, choices=WorkPolicy.choices, default=WorkPolicy.OFFICE)
     is_attendance_tracked = models.BooleanField(default=True)
 
+    # --- leaving the company ---
+    exit_date = models.DateField(
+        null=True, blank=True, verbose_name="Last working day",
+        help_text="Attendance stops counting after this date",
+    )
+    exit_reason = models.CharField(
+        max_length=16, choices=ExitReason.choices, blank=True
+    )
+    exit_note = models.TextField(blank=True)
+    deactivated_at = models.DateTimeField(null=True, blank=True)
+    deactivated_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="deactivated_staff"
+    )
+
     objects = UserManager()
 
     class Meta:
@@ -198,3 +225,31 @@ class User(AbstractUser):
     @property
     def effective_shift(self):
         return self.shift or Shift.get_default()
+
+    @property
+    def has_left(self):
+        return not self.is_active
+
+    @property
+    def employment_status(self):
+        if self.is_active:
+            return "Active" if self.is_attendance_tracked else "Active (not tracked)"
+        return self.get_exit_reason_display() or "Deactivated"
+
+    @property
+    def status_badge(self):
+        if not self.is_active:
+            return "bad"
+        return "ok" if self.is_attendance_tracked else "muted"
+
+    def counts_on(self, day) -> bool:
+        """Whether this person should appear in the attendance for a given day.
+
+        Somebody who joined in March has no February; somebody whose last day
+        was in June should not start collecting absences in July.
+        """
+        if self.joining_date and day < self.joining_date:
+            return False
+        if self.exit_date and day > self.exit_date:
+            return False
+        return True
