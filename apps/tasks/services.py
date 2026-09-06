@@ -69,10 +69,7 @@ def summarise(tasks, start: date_cls, end: date_cls) -> dict:
         row["date"]: row["minutes"]
         for row in tasks.values("date").annotate(minutes=Sum("minutes_spent"))
     }
-    per_project = {}
-    for row in tasks.values("project").annotate(minutes=Sum("minutes_spent")):
-        key = (row["project"] or "").strip() or "Unassigned"
-        per_project[key] = per_project.get(key, 0) + row["minutes"]
+    per_project = collapse_projects(tasks)
 
     labels = dict(DailyTask.Progress.choices)
     per_progress = {
@@ -104,8 +101,9 @@ def summarise(tasks, start: date_cls, end: date_cls) -> dict:
         "daily_average": DailyTask.format_minutes(round(total / logged_days)) if logged_days else "—",
         "peak_minutes": max((d["minutes"] for d in days), default=0),
         "projects": sorted(
-            ({"name": k, "minutes": v, "display": DailyTask.format_minutes(v),
-              "share": round(v / total * 100) if total else 0}
+            ({"name": k, "minutes": v["minutes"], "tasks": v["tasks"],
+              "display": DailyTask.format_minutes(v["minutes"]),
+              "share": round(v["minutes"] / total * 100) if total else 0}
              for k, v in per_project.items()),
             key=lambda r: -r["minutes"],
         ),
@@ -171,3 +169,65 @@ def employee_rows(employees, start: date_cls, end: date_cls):
             "coverage": coverage(minutes, worked.get(emp.id, 0)),
         })
     return sorted(rows, key=lambda r: -r["minutes"])
+
+
+def collapse_projects(tasks) -> dict:
+    """Group task time by project, treating different spellings as one.
+
+    People type the project name by hand, so "meditek", "Meditek" and
+    " Meditek " all arrive as separate rows and a report ends up with fifty
+    entries that are really fifteen. Matching is done on a lowercased,
+    trimmed name; the spelling shown is whichever one was used most.
+    """
+    buckets: dict[str, dict] = {}
+    rows = tasks.values("project").annotate(minutes=Sum("minutes_spent"), count=Count("id"))
+
+    for row in rows:
+        raw = (row["project"] or "").strip()
+        key = raw.lower() or "unassigned"
+        bucket = buckets.setdefault(key, {"minutes": 0, "tasks": 0, "spellings": {}})
+        minutes = row["minutes"] or 0
+        bucket["minutes"] += minutes
+        bucket["tasks"] += row["count"]
+        label = raw or "Unassigned"
+        seen = bucket["spellings"].setdefault(label, {"tasks": 0, "minutes": 0})
+        seen["tasks"] += row["count"]
+        seen["minutes"] += minutes
+
+    def pick_label(spellings):
+        """Most tasks wins; ties go to the most time, then alphabetically.
+
+        Without the tie-breaks the label would flip between "Meditek" and
+        "MEDITEK" from one page load to the next, which looks like a bug.
+        """
+        return sorted(
+            spellings.items(),
+            key=lambda kv: (-kv[1]["tasks"], -kv[1]["minutes"], kv[0]),
+        )[0][0]
+
+    return {
+        pick_label(b["spellings"]): {"minutes": b["minutes"], "tasks": b["tasks"]}
+        for b in buckets.values()
+    }
+
+
+def split_projects(projects, limit=8):
+    """The biggest few projects, with everything else folded into one row.
+
+    A sidebar listing every project turns a report into a scroll. The handful
+    that account for most of the time are the ones worth seeing at a glance;
+    the rest live on their own page.
+    """
+    top = projects[:limit]
+    rest = projects[limit:]
+    other = None
+    if rest:
+        minutes = sum(r["minutes"] for r in rest)
+        other = {
+            "count": len(rest),
+            "minutes": minutes,
+            "display": DailyTask.format_minutes(minutes),
+            "share": sum(r["share"] for r in rest),
+            "tasks": sum(r["tasks"] for r in rest),
+        }
+    return top, other

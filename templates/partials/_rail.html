@@ -27,6 +27,7 @@
     <a class="nav {% nav_active 'reports:employee' %}" href="{% url 'reports:employee' %}">Employee report</a>
     <a class="nav {% nav_active 'reports:late' %}" href="{% url 'reports:late' %}">Late &amp; early out</a>
     <a class="nav {% nav_active 'reports:tasks' %}" href="{% url 'reports:tasks' %}">Task report</a>
+    <a class="nav {% nav_active 'reports:projects' %}" href="{% url 'reports:projects' %}">Projects</a>
     <a class="nav {% nav_active 'reports:outings' 'attendance:outing_edit' %}" href="{% url 'reports:outings' %}">Trips out
       {% if unexplained_total %}<span class="pill">{{ unexplained_total }}</span>{% endif %}</a>
     <a class="nav {% nav_active 'reports:department' %}" href="{% url 'reports:department' %}">Department summary</a>

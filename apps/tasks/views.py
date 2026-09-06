@@ -16,7 +16,7 @@ from .models import DailyTask
 from apps.utils import paginate
 
 from .services import (PERIODS, attendance_minutes, coverage, period_bounds,
-                       shift_period, summarise)
+                       shift_period, split_projects, summarise)
 
 
 @login_required
@@ -156,7 +156,11 @@ def my_task_report(request):
     summary = summarise(tasks, start, end)
     worked = attendance_minutes(request.user, start, end)
 
+    top_projects, other_projects = split_projects(summary["projects"])
+
     return render(request, "tasks/my_task_report.html", {
+        "top_projects": top_projects,
+        "other_projects": other_projects,
         "kind": kind, "periods": PERIODS,
         "start": start, "end": end, "label": label,
         "anchor": anchor,
@@ -165,4 +169,33 @@ def my_task_report(request):
         "summary": summary,
         "coverage": coverage(summary["total_minutes"], worked),
         "show_days": kind != "day",
+    })
+
+
+@login_required
+def my_projects(request):
+    """The full project breakdown for one employee, a page at a time."""
+    from apps.attendance.views import _parse_date
+
+    kind = request.GET.get("period", "month")
+    if kind not in dict(PERIODS):
+        kind = "month"
+    anchor = _parse_date(request.GET.get("date"))
+    start, end, label = period_bounds(kind, anchor)
+
+    tasks = DailyTask.objects.filter(employee=request.user, date__range=(start, end))
+    summary = summarise(tasks, start, end)
+    page = paginate(request, summary["projects"], per_page=25)
+
+    return render(request, "tasks/project_breakdown.html", {
+        "scope": "mine",
+        "title": "My projects",
+        "kind": kind, "periods": PERIODS, "anchor": anchor,
+        "label": label, "start": start, "end": end,
+        "prev": shift_period(kind, anchor, -1),
+        "next": shift_period(kind, anchor, 1),
+        "page": page, "projects": page.object_list,
+        "total_display": summary["total_display"],
+        "project_count": len(summary["projects"]),
+        "back_url": "tasks:my_report",
     })

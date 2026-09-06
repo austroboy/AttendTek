@@ -11,6 +11,7 @@ urlpatterns = [
     path("late/", views.late_report, name="late"),
     path("trips/", views.outing_report, name="outings"),
     path("tasks/", views.task_report, name="tasks"),
+    path("projects/", views.project_report, name="projects"),
     path("export/tasks/", views.export_tasks_csv, name="export_tasks"),
     path("export/trips/", views.export_outings_csv, name="export_outings"),
     path("department/", views.department_report, name="department"),

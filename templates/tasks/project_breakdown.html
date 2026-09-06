@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block eyebrow %}{% if scope == 'team' %}Reports{% else %}My portal{% endif %} · {{ label }}{% endblock %}
+{% block heading %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="row" style="margin-bottom:14px">
+  {% for value, name in periods %}
+    <a class="btn sm {% if kind == value %}dark{% endif %}"
+       href="?period={{ value }}&date={{ anchor|date:'Y-m-d' }}&dept={{ dept }}">{{ name }}</a>
+  {% endfor %}
+  {% if kind != 'custom' %}
+    <a class="btn sm" href="?period={{ kind }}&date={{ prev|date:'Y-m-d' }}&dept={{ dept }}">← Previous</a>
+    <a class="btn sm" href="?period={{ kind }}&date={{ next|date:'Y-m-d' }}&dept={{ dept }}">Next →</a>
+  {% endif %}
+  <a class="btn sm right" href="{% url back_url %}">← Back to the report</a>
+</div>
+
+<div class="grid g-4" style="margin-bottom:14px">
+  <div class="stat accent"><div class="v">{{ total_display }}</div><div class="l">Total logged</div></div>
+  <div class="stat info"><div class="v">{{ project_count }}</div><div class="l">Projects</div></div>
+  <div class="stat"><div class="v">{{ page.paginator.num_pages }}</div><div class="l">Pages</div></div>
+  <div class="stat ok"><div class="v">{{ projects.0.display|default:"—" }}</div><div class="l">Biggest project</div></div>
+</div>
+
+{% if scope == 'team' and departments %}
+<div class="card" style="margin-bottom:14px"><div class="bd"><form method="get" class="filters">
+  <input type="hidden" name="period" value="{{ kind }}">
+  <input type="hidden" name="date" value="{{ anchor|date:'Y-m-d' }}">
+  <div class="fgroup"><label>Department</label><select class="field" name="dept"><option value="">All</option>
+    {% for d in departments %}<option value="{{ d.id }}" {% if dept == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}</select></div>
+  <button class="btn primary">Apply</button>
+</form></div></div>
+{% endif %}
+
+<div class="card">
+  <div class="hd"><h2>Where the time went</h2>
+    <span class="right tiny muted">largest first</span></div>
+  <div class="bd flush"><div class="table-wrap"><table>
+    <thead><tr><th style="width:44px">#</th><th>Project</th><th>Tasks</th><th>Time</th>
+      <th style="width:220px">Share of logged time</th></tr></thead>
+    <tbody>{% for p in projects %}<tr>
+      <td class="mono tiny muted">{{ forloop.counter0|add:page.start_index }}</td>
+      <td><b>{{ p.name }}</b></td>
+      <td class="mono small">{{ p.tasks }}</td>
+      <td class="mono"><b>{{ p.display }}</b></td>
+      <td>
+        <div style="height:7px;background:var(--muted-soft);border-radius:4px;overflow:hidden;margin-bottom:3px">
+          <div style="height:100%;width:{{ p.share }}%;background:var(--accent)"></div></div>
+        <span class="tiny muted">{{ p.share }}%</span>
+      </td>
+    </tr>{% empty %}
+      <tr><td colspan="5"><div class="empty"><b>Nothing logged in this period</b>
+        Projects appear here once people put a project name on their tasks.</div></td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  {% include "partials/_pagination.html" %}</div>
+</div>
+
+<div class="msg info" style="margin-top:14px">
+  Project names are typed by hand, so <b>meditek</b> and <b>Meditek</b> are counted as the same
+  project here. Agreeing on a short list of names across the team keeps this page readable.
+</div>
+{% endblock %}

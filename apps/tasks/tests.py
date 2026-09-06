@@ -8,7 +8,7 @@ from apps.accounts.models import Shift, User
 from .forms import DailyTaskForm
 from .models import DailyTask
 from .services import (coverage, employee_rows, period_bounds, shift_period,
-                       summarise)
+                       split_projects, summarise)
 
 
 class TaskDurationTests(TestCase):
@@ -233,3 +233,68 @@ class TaskEditTests(TestCase):
         self.assertTrue(self.make_task(progress="IN_PROGRESS").is_open)
         self.assertTrue(self.make_task(progress="BLOCKED").is_open)
         self.assertFalse(self.make_task(progress="DONE").is_open)
+
+
+class ProjectBreakdownTests(TestCase):
+    """Project names are typed by hand, so the report has to tidy them up."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), is_default=True,
+        )
+        cls.emp = User.objects.create_user(
+            username="mehedi", password="pw", employee_id="EMP-070", shift=cls.shift)
+
+        entries = [
+            ("meditek", 300), ("Meditek", 180), ("  MEDITEK ", 60),   # one project, three spellings
+            ("BIDYATek", 120), ("", 90),                              # and one with no project
+        ]
+        for project, minutes in entries:
+            DailyTask.objects.create(
+                employee=cls.emp, date=date(2026, 8, 24), title="Work",
+                project=project, minutes_spent=minutes, progress="DONE")
+
+    def summary(self):
+        start, end, _ = period_bounds("month", date(2026, 8, 24))
+        return summarise(
+            DailyTask.objects.filter(employee=self.emp, date__range=(start, end)), start, end)
+
+    def test_spellings_of_one_project_are_merged(self):
+        projects = {p["name"]: p for p in self.summary()["projects"]}
+        self.assertEqual(len(projects), 3)          # Meditek, BIDYATek, Unassigned
+        biggest = self.summary()["projects"][0]
+        self.assertEqual(biggest["minutes"], 540)   # 300 + 180 + 60
+        self.assertEqual(biggest["tasks"], 3)
+
+    def test_the_most_used_spelling_is_the_one_shown(self):
+        names = [p["name"] for p in self.summary()["projects"]]
+        self.assertIn("meditek", names)             # used first and most often
+        self.assertNotIn("Meditek", names)
+
+    def test_tasks_with_no_project_are_labelled(self):
+        names = [p["name"] for p in self.summary()["projects"]]
+        self.assertIn("Unassigned", names)
+
+    def test_split_keeps_the_biggest_and_folds_the_rest(self):
+        projects = [
+            {"name": f"P{i}", "minutes": 100 - i, "tasks": 1, "share": 1,
+             "display": "1h"} for i in range(20)
+        ]
+        top, other = split_projects(projects, limit=8)
+        self.assertEqual(len(top), 8)
+        self.assertEqual(other["count"], 12)
+        self.assertEqual(other["minutes"], sum(p["minutes"] for p in projects[8:]))
+
+    def test_split_returns_nothing_extra_for_a_short_list(self):
+        projects = [{"name": "One", "minutes": 60, "tasks": 1, "share": 100, "display": "1h"}]
+        top, other = split_projects(projects, limit=8)
+        self.assertEqual(len(top), 1)
+        self.assertIsNone(other)
+
+    def test_project_page_paginates(self):
+        self.client.force_login(self.emp)
+        response = self.client.get("/tasks/me/projects/?period=month&date=2026-08-24")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["project_count"], 3)

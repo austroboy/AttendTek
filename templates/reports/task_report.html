@@ -104,8 +104,9 @@
   </div>
 
   <div class="stack">
-    <div class="card"><div class="hd"><h3>Where the time went</h3></div><div class="bd">
-      {% for p in summary.projects %}
+    <div class="card"><div class="hd"><h3>Where the time went</h3>
+      <span class="right tiny muted">top {{ top_projects|length }}</span></div><div class="bd">
+      {% for p in top_projects %}
         <div style="margin-bottom:10px">
           <div class="row" style="margin-bottom:4px">
             <span class="small">{{ p.name }}</span>
@@ -115,6 +116,18 @@
           <span class="tiny muted">{{ p.share }}% of logged time</span>
         </div>
       {% empty %}<div class="tiny muted">No projects logged.</div>{% endfor %}
+
+      {% if other_projects %}
+        <div class="kv" style="border-top:1px solid var(--line);padding-top:10px">
+          <span class="small muted">{{ other_projects.count }} smaller project{{ other_projects.count|pluralize }}</span>
+          <b class="mono small">{{ other_projects.display }}</b></div>
+      {% endif %}
+
+      {% if summary.projects %}
+        <a class="btn sm block" style="margin-top:10px"
+           href="{% url 'reports:projects' %}?period={{ kind }}&date={{ anchor|date:'Y-m-d' }}&dept={{ dept }}">
+          See all {{ summary.projects|length }} projects</a>
+      {% endif %}
     </div></div>
 
     <div class="card"><div class="hd"><h3>By progress</h3></div><div class="bd">

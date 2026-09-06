@@ -17,7 +17,7 @@ from apps.attendance.models import DailyAttendance, Outing
 from apps.attendance.services import month_summary
 from apps.tasks.models import DailyTask
 from apps.tasks.services import (PERIODS, employee_rows, period_bounds,
-                                 shift_period, summarise)
+                                 shift_period, split_projects, summarise)
 
 S = DailyAttendance.Status
 
@@ -367,7 +367,11 @@ def task_report(request):
 
     working_days = sum(1 for d in summary["days"] if d["is_logged"]) or 1
 
+    top_projects, other_projects = split_projects(summary["projects"])
+
     return render(request, "reports/task_report.html", {
+        "top_projects": top_projects,
+        "other_projects": other_projects,
         "kind": kind, "periods": PERIODS,
         "start": start, "end": end, "label": label, "anchor": anchor,
         "prev": shift_period(kind, anchor, -1) if kind != "custom" else anchor,
@@ -414,3 +418,56 @@ def export_tasks_csv(request):
             t.get_progress_display(), t.details,
         ])
     return response
+
+
+@manager_required
+def project_report(request):
+    """Every project the team logged time against, paginated.
+
+    The task report shows only the largest few - a team that types its own
+    project names will produce dozens, and a sidebar is the wrong place to
+    read a long list.
+    """
+    kind = request.GET.get("period", "month")
+    if kind not in dict(PERIODS):
+        kind = "month"
+    try:
+        anchor = datetime.strptime(request.GET.get("date"), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        anchor = app_today()
+
+    custom_from, custom_to = request.GET.get("from"), request.GET.get("to")
+    if custom_from and custom_to:
+        try:
+            start = datetime.strptime(custom_from, "%Y-%m-%d").date()
+            end = datetime.strptime(custom_to, "%Y-%m-%d").date()
+            label = f"{start:%d %b} – {end:%d %b %Y}"
+            kind = "custom"
+        except ValueError:
+            start, end, label = period_bounds("month", anchor)
+    else:
+        start, end, label = period_bounds(kind, anchor)
+
+    dept = request.GET.get("dept", "")
+    employees = User.objects.active_staff()
+    if dept:
+        employees = employees.filter(department_id=dept)
+
+    tasks = DailyTask.objects.filter(date__range=(start, end), employee__in=employees)
+    summary = summarise(tasks, start, end)
+    page = paginate(request, summary["projects"], per_page=25)
+
+    return render(request, "tasks/project_breakdown.html", {
+        "scope": "team",
+        "title": "Projects",
+        "kind": kind, "periods": PERIODS, "anchor": anchor,
+        "label": label, "start": start, "end": end,
+        "prev": shift_period(kind, anchor, -1) if kind != "custom" else anchor,
+        "next": shift_period(kind, anchor, 1) if kind != "custom" else anchor,
+        "page": page, "projects": page.object_list,
+        "total_display": summary["total_display"],
+        "project_count": len(summary["projects"]),
+        "departments": Department.objects.all(),
+        "dept": dept,
+        "back_url": "reports:tasks",
+    })
