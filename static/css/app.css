@@ -61,7 +61,18 @@ a:hover{text-decoration:underline}
 .rail .pill{margin-left:auto;background:var(--brand-orange);color:#fff;border-radius:20px;padding:0 6px;font-size:10.5px;font-family:"IBM Plex Mono",monospace}
 .rail .pill.count{background:var(--ink-3);color:#B7CBCE}
 .rail .who{margin-top:18px;border-top:1px solid #234A70;padding-top:14px;display:flex;gap:9px;align-items:center}
-.avatar{width:32px;height:32px;border-radius:50%;background:var(--ink-3);color:#DCE9EA;display:grid;place-items:center;font-size:12px;font-weight:600;flex:0 0 32px}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--ink-3);color:#DCE9EA;display:grid;place-items:center;font-size:12px;font-weight:600;flex:0 0 32px;overflow:hidden}
+img.avatar{object-fit:cover}
+.avatar.lg{width:64px;height:64px;flex:0 0 64px;font-size:22px}
+.avatar.xl{width:104px;height:104px;flex:0 0 104px;font-size:34px;border:3px solid #fff;box-shadow:0 2px 12px rgba(18,49,78,.18)}
+
+/* profile header */
+.profile-head{background:linear-gradient(135deg,var(--ink) 0%,var(--ink-3) 100%);border-radius:var(--radius) var(--radius) 0 0;height:96px}
+.profile-body{padding:0 20px 18px;margin-top:-52px}
+.profile-body h2{color:var(--text);margin-top:10px}
+.profile-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.photo-picker{display:flex;gap:14px;align-items:center;padding:12px;border:1px dashed var(--line-2);border-radius:var(--radius-sm);background:#FAFBFC}
+.photo-picker input[type=file]{font-size:12.5px}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{

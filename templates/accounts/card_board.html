@@ -8,7 +8,7 @@ Once assigned, any punch from that card is recorded against this employee.</div>
   <div class="bd flush"><div class="table-wrap"><table>
   <thead><tr><th>Employee</th><th>Department</th><th style="width:230px">RFID card ID</th><th>Issued</th></tr></thead>
   <tbody>{% for e in employees %}<tr>
-    <td><div class="emp"><div class="avatar">{{ e.initials }}</div><div><b>{{ e.display_name }}</b><span>{{ e.employee_id }}</span></div></div></td>
+    <td><div class="emp">{% include "partials/_avatar.html" with person=e %}<div><b>{{ e.display_name }}</b><span>{{ e.employee_id }}</span></div></div></td>
     <td class="small">{{ e.department|default:"—" }}</td>
     <td><input class="field mono" name="card_{{ e.pk }}" value="{{ e.rfid_card_no|default:'' }}" placeholder="card ID"></td>
     <td class="mono small">{{ e.card_issued_on|date:"d M Y"|default:"—" }}</td>

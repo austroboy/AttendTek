@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import LoginView
 from django.db.models import Q
@@ -12,8 +12,8 @@ from apps.attendance.models import DailyAttendance
 from apps.attendance.services import month_summary
 from apps.utils import paginate
 
-from .forms import (CardAssignForm, DepartmentForm, DesignationForm, EmployeeForm,
-                    LoginForm, ProfileForm, ShiftForm)
+from .forms import (CardAssignForm, ChangePasswordForm, DepartmentForm,
+                    DesignationForm, EmployeeForm, LoginForm, ProfileForm, ShiftForm)
 from .models import Department, Designation, Shift, User
 from .permissions import manager_required
 
@@ -146,12 +146,55 @@ def card_assign_board(request):
 # ---------------------------------------------------------------- profile
 @login_required
 def profile(request):
-    form = ProfileForm(request.POST or None, request.FILES or None, instance=request.user)
-    if request.method == "POST" and form.is_valid():
+    """The employee's own page: who they are, and how their month is going."""
+    me = request.user
+    today = app_today()
+    which = request.POST.get("form") if request.method == "POST" else None
+
+    form = ProfileForm(
+        request.POST if which == "profile" else None,
+        request.FILES if which == "profile" else None,
+        instance=me,
+    )
+    password_form = ChangePasswordForm(me, request.POST if which == "password" else None)
+
+    if which == "profile" and form.is_valid():
         form.save()
         messages.success(request, "Profile updated.")
         return redirect("accounts:profile")
-    return render(request, "accounts/profile.html", {"form": form})
+
+    if which == "password" and password_form.is_valid():
+        password_form.save()
+        # Without this the person is logged out the moment their password changes.
+        update_session_auth_hash(request, me)
+        messages.success(request, "Password changed. Keep the new one to yourself.")
+        return redirect("accounts:profile")
+
+    summary = month_summary(me, today.year, today.month)
+    recent = DailyAttendance.objects.filter(employee=me).order_by("-date")[:7]
+
+    tenure = None
+    if me.joining_date:
+        days = (today - me.joining_date).days
+        years, remainder = divmod(days, 365)
+        months = remainder // 30
+        parts = []
+        if years:
+            parts.append(f"{years} year{'s' if years > 1 else ''}")
+        if months:
+            parts.append(f"{months} month{'s' if months > 1 else ''}")
+        tenure = " ".join(parts) or f"{days} days"
+
+    return render(request, "accounts/profile.html", {
+        "form": form,
+        "password_form": password_form,
+        "summary": summary,
+        "recent": recent,
+        "tenure": tenure,
+        "month_label": today.strftime("%B %Y"),
+        "leave_count": me.leave_requests.filter(status="APPROVED").count(),
+        "task_count": me.daily_tasks.count(),
+    })
 
 
 # ---------------------------------------------------------------- settings

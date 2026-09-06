@@ -1,17 +1,131 @@
-{% extends "base.html" %}{% block title %}Profile{% endblock %}
+{% extends "base.html" %}{% load static %}
+{% block title %}My profile{% endblock %}
 {% block eyebrow %}Account{% endblock %}{% block heading %}My profile{% endblock %}
+
 {% block content %}
-<div class="grid g-2" style="max-width:900px">
-  <div class="card"><div class="hd"><h2>Edit profile</h2></div><div class="bd">
-    <form method="post" enctype="multipart/form-data">{% csrf_token %}
-      {% include "partials/_form.html" %}<button class="btn primary">Save</button></form>
-  </div></div>
-  <div class="card"><div class="hd"><h2>Office details</h2></div><div class="bd">
-    <div class="kv"><span>Employee ID</span><b>{{ user.employee_id }}</b></div>
-    <div class="kv"><span>RFID card</span><b>{{ user.rfid_card_no|default:"not assigned" }}</b></div>
-    <div class="kv"><span>Department</span><b>{{ user.department|default:"—" }}</b></div>
-    <div class="kv"><span>Shift</span><b>{{ user.effective_shift }}</b></div>
-    <div class="kv"><span>Work policy</span><b>{{ user.get_work_policy_display }}</b></div>
-  </div></div>
+<div class="grid g-side">
+  <div class="stack">
+
+    <div class="card" style="overflow:hidden">
+      <div class="profile-head"></div>
+      <div class="profile-body">
+        <div class="row" style="align-items:flex-end;gap:16px">
+          {% include "partials/_avatar.html" with person=user size="xl" %}
+          <div style="flex:1;min-width:0;padding-bottom:4px">
+            <h2 style="font-size:22px">{{ user.display_name }}</h2>
+            <div class="small muted">{{ user.designation|default:"Employee" }}{% if user.department %} · {{ user.department }}{% endif %}</div>
+            <div class="profile-meta">
+              <span class="badge muted"><i class="dot"></i>{{ user.employee_id|default:"No employee ID" }}</span>
+              <span class="badge {% if user.work_policy == 'OFFICE' %}muted{% else %}info{% endif %}">{{ user.get_work_policy_display }}</span>
+              {% if user.is_manager %}<span class="badge ok">{{ user.get_role_display }}</span>{% endif %}
+              {% if user.rfid_card_no %}<span class="badge ok">Card assigned</span>
+              {% else %}<span class="badge warn">No card yet</span>{% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Your details</h2>
+        <span class="right tiny muted">Only you can change these</span></div>
+      <div class="bd">
+        <form method="post" enctype="multipart/form-data">{% csrf_token %}
+          <input type="hidden" name="form" value="profile">
+
+          <div class="fgroup">
+            <label>{{ form.photo.label }}</label>
+            <div class="photo-picker">
+              {% include "partials/_avatar.html" with person=user size="lg" %}
+              <div style="flex:1;min-width:0">
+                {{ form.photo }}
+                <div class="help">{{ form.photo.help_text }}</div>
+                {% for e in form.photo.errors %}<div class="err">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="fgroup"><label for="{{ form.first_name.id_for_label }}">First name</label>{{ form.first_name }}
+              {% for e in form.first_name.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+            <div class="fgroup"><label for="{{ form.last_name.id_for_label }}">Last name</label>{{ form.last_name }}</div>
+            <div class="fgroup"><label for="{{ form.email.id_for_label }}">Email address</label>{{ form.email }}
+              {% for e in form.email.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+            <div class="fgroup"><label for="{{ form.phone.id_for_label }}">Phone</label>{{ form.phone }}</div>
+          </div>
+          <button class="btn primary">Save changes</button>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Change password</h2></div>
+      <div class="bd">
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="form" value="password">
+          {% include "partials/_form.html" with form=password_form %}
+          <button class="btn primary">Update password</button>
+        </form>
+        <p class="tiny muted" style="margin-top:12px">If an admin set your password for you,
+          change it here so nobody else knows it.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Last 7 days</h2>
+        <a class="right tiny" href="{% url 'attendance:my_attendance' %}">Full attendance →</a></div>
+      <div class="bd flush"><table>
+        <thead><tr><th>Date</th><th>In</th><th>Required out</th><th>Out</th><th>Worked</th><th>Status</th></tr></thead>
+        <tbody>{% for r in recent %}<tr>
+          <td class="mono small">{{ r.date|date:"D, d M" }}</td>
+          <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+          <td class="mono" style="color:var(--bad)">{{ r.required_out|time:"h:i A"|default:"—" }}</td>
+          <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+          <td class="mono small">{{ r.worked_display }}</td>
+          <td>{% include "partials/_badge.html" with record=r %}</td>
+        </tr>{% empty %}
+          <tr><td colspan="6"><div class="empty"><b>No attendance recorded yet</b></div></td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="card"><div class="hd"><h3>{{ month_label }}</h3></div><div class="bd">
+      <div class="grid g-2" style="gap:10px;margin-bottom:12px">
+        <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
+        <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late</div></div>
+        <div class="stat bad"><div class="v">{{ summary.absent }}</div><div class="l">Absent</div></div>
+        <div class="stat accent"><div class="v">{{ summary.worked_hours }}</div><div class="l">Hours</div></div>
+      </div>
+      <div class="kv"><span>Home office days</span><b>{{ summary.home_office }}</b></div>
+      <div class="kv"><span>Early out</span><b>{{ summary.early_out }}</b></div>
+      <div class="kv"><span>Overtime</span><b>{{ summary.overtime_hours }} h</b></div>
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Office details</h3>
+      <span class="right tiny muted">set by admin</span></div><div class="bd">
+      <div class="kv"><span>Employee ID</span><b>{{ user.employee_id|default:"—" }}</b></div>
+      <div class="kv"><span>RFID card</span><b class="mono">{{ user.rfid_card_no|default:"not assigned" }}</b></div>
+      <div class="kv"><span>Department</span><b>{{ user.department|default:"—" }}</b></div>
+      <div class="kv"><span>Designation</span><b>{{ user.designation|default:"—" }}</b></div>
+      <div class="kv"><span>Reports to</span><b>{{ user.manager.display_name|default:"—" }}</b></div>
+      <div class="kv"><span>Shift</span><b>{{ user.effective_shift.name|default:"—" }}</b></div>
+      <div class="kv"><span>Office hours</span><b class="mono">{{ user.effective_shift.start_time|time:"h:i A" }}–{{ user.effective_shift.end_time|time:"h:i A" }}</b></div>
+      <div class="kv"><span>Joined</span><b>{{ user.joining_date|date:"d M Y"|default:"—" }}</b></div>
+      {% if tenure %}<div class="kv"><span>With the company</span><b>{{ tenure }}</b></div>{% endif %}
+      <p class="tiny muted" style="margin-top:10px">Something wrong here? Ask your office admin —
+        these fields affect how your attendance is counted.</p>
+    </div></div>
+
+    <div class="card"><div class="hd"><h3>Your record</h3></div><div class="bd">
+      <div class="kv"><span>Tasks logged</span><b>{{ task_count }}</b></div>
+      <div class="kv"><span>Approved leaves</span><b>{{ leave_count }}</b></div>
+      <div class="sep"></div>
+      <a class="btn block" href="{% url 'tasks:my_report' %}">My task report</a>
+      <a class="btn block" style="margin-top:8px" href="{% url 'leaves:my_leaves' %}">My leave</a>
+      <a class="btn block" style="margin-top:8px" href="{% url 'attendance:my_outings' %}">My trips</a>
+    </div></div>
+  </div>
 </div>
 {% endblock %}

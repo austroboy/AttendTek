@@ -21,7 +21,7 @@
   <thead><tr><th>Employee</th><th>Department</th><th>RFID card ID</th><th>Device user ID</th><th>Shift</th><th>Policy</th><th></th></tr></thead>
   <tbody>{% for e in employees %}
     <tr>
-      <td><div class="emp"><div class="avatar">{{ e.initials }}</div><div>
+      <td><div class="emp">{% include "partials/_avatar.html" with person=e %}<div>
         <b>{{ e.display_name }}</b><span>{{ e.employee_id }} · {{ e.designation|default:"—" }}</span></div></div></td>
       <td class="small">{{ e.department|default:"—" }}</td>
       <td>{% if e.rfid_card_no %}<span class="mono">{{ e.rfid_card_no }}</span>

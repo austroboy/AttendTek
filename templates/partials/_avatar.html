@@ -1,0 +1,10 @@
+{% comment %}
+Shows the person's photo, falling back to their initials. Used everywhere an
+avatar appears so a newly uploaded photo turns up across the whole app at once.
+Usage: {% include "partials/_avatar.html" with person=employee size="lg" %}
+{% endcomment %}
+{% if person.photo %}
+  <img class="avatar {{ size }}" src="{{ person.photo.url }}" alt="{{ person.display_name }}">
+{% else %}
+  <div class="avatar {{ size }}">{{ person.initials }}</div>
+{% endif %}

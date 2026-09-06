@@ -1,5 +1,6 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import (AuthenticationForm, PasswordChangeForm,
+                                       UserCreationForm)
 
 from .models import Department, Designation, Shift, User
 
@@ -98,9 +99,35 @@ class CardAssignForm(StyledFormMixin, forms.ModelForm):
 
 
 class ProfileForm(StyledFormMixin, forms.ModelForm):
+    """What an employee is allowed to change about themselves.
+
+    Deliberately short: everything that affects attendance - employee ID, card
+    number, shift, role - stays with the admin. A person can correct how they
+    are reached and how they look, not what they are paid for.
+    """
+
     class Meta:
         model = User
         fields = ["first_name", "last_name", "email", "phone", "photo"]
+        labels = {"photo": "Profile photo"}
+        help_texts = {"photo": "A square picture works best. Up to 5 MB."}
+
+    def clean_photo(self):
+        photo = self.cleaned_data.get("photo")
+        # Only guard uploads: an untouched existing file has no size to read.
+        if photo and hasattr(photo, "size") and photo.size > 5 * 1024 * 1024:
+            raise forms.ValidationError("That image is over 5 MB. Please pick a smaller one.")
+        return photo
+
+
+class ChangePasswordForm(StyledFormMixin, PasswordChangeForm):
+    """The standard Django password change, styled like the rest of the app."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["old_password"].label = "Current password"
+        self.fields["new_password1"].label = "New password"
+        self.fields["new_password2"].label = "New password again"
 
 
 class DepartmentForm(StyledFormMixin, forms.ModelForm):
