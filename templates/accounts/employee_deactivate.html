@@ -6,7 +6,7 @@
 {% block content %}
 <div class="grid g-side">
   <div class="card" style="align-self:start"><div class="bd">
-    <div class="row" style="gap:14px;margin-bottom:16px">
+    <div class="row" style="gap:14px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--line)">
       {% include "partials/_avatar.html" with person=employee size="lg" %}
       <div style="flex:1;min-width:0">
         <h2>{{ employee.display_name }}</h2>

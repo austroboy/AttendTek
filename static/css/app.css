@@ -256,6 +256,21 @@ select.field{appearance:none;background-image:linear-gradient(45deg,transparent 
 .kv span{color:var(--text-2)}
 .kv b{font-family:"IBM Plex Mono",monospace;font-weight:500}
 
+/* people who have left - visible at a glance, not shouting */
+tr.is-former{background:#FDF6F5}
+tr.is-former:hover{background:#FBEEEC}
+tr.is-former td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
+tr.is-former .emp b{color:var(--bad)}
+.is-former .avatar{filter:grayscale(1);opacity:.75}
+.former-tag{display:inline-block;margin-left:6px;font-size:10px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--bad);background:var(--bad-soft);
+  border:1px solid #F1CFCC;border-radius:4px;padding:0 5px;vertical-align:1px;
+  font-family:"IBM Plex Mono",monospace}
+.profile-head.is-former{
+  background:radial-gradient(900px 200px at 88% -40%, rgba(185,63,57,.35), transparent 60%),
+             linear-gradient(135deg,#3B2020 0%, #4C2A2A 55%, #5E3535 100%);
+}
+
 /* pagination */
 .pager{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--line);background:#FAFBFC}
 .pager-info{font-size:12px;color:var(--text-2);margin:0 4px}

@@ -71,6 +71,9 @@ def dashboard(request):
         "unexplained_trips": Outing.objects.filter(
             date=day, purpose=Outing.Purpose.UNSPECIFIED).count(),
         "unmatched_punches": PunchLog.objects.filter(is_matched=False).count(),
+        "former_with_cards": User.objects.filter(is_active=False)
+                                 .exclude(rfid_card_no__isnull=True)
+                                 .exclude(rfid_card_no="").count(),
         "no_card": User.objects.filter(is_active=True).filter(
             Q(rfid_card_no__isnull=True) | Q(rfid_card_no="")).count(),
         "today_tasks": DailyTask.objects.filter(date=day).select_related("employee")[:6],

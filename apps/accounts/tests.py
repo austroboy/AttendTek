@@ -354,3 +354,23 @@ class OffboardingTests(TestCase):
         response = self.client.post("/accounts/login/",
                                     {"username": "leaver", "password": "LeavePass123"})
         self.assertContains(response, "deactivated")
+
+    def test_former_employees_are_marked_in_the_list(self):
+        from .offboarding import deactivate_employee
+
+        deactivate_employee(self.emp, by=self.admin, exit_date=date(2026, 8, 31))
+        self.client.force_login(self.admin)
+        response = self.client.get("/accounts/employees/?status=all")
+        body = response.content.decode()
+        self.assertIn("is-former", body)
+        self.assertIn("former-tag", body)
+
+    def test_deactivate_is_reachable_straight_from_the_list(self):
+        self.client.force_login(self.admin)
+        response = self.client.get("/accounts/employees/?status=active")
+        self.assertContains(response, f"/accounts/employees/{self.emp.pk}/deactivate/")
+
+    def test_the_list_never_offers_to_deactivate_yourself(self):
+        self.client.force_login(self.admin)
+        response = self.client.get("/accounts/employees/?status=active")
+        self.assertNotContains(response, f"/accounts/employees/{self.admin.pk}/deactivate/")

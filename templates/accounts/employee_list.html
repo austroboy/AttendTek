@@ -3,7 +3,8 @@
 {% block content %}
 <div class="row" style="margin-bottom:14px">
   <a class="btn sm {% if status == 'active' %}dark{% endif %}" href="?status=active">Active ({{ active_count }})</a>
-  <a class="btn sm {% if status == 'former' %}dark{% endif %}" href="?status=former">Former ({{ former_count }})</a>
+  <a class="btn sm {% if status == 'former' %}dark{% endif %}" href="?status=former"
+     {% if former_count %}style="color:var(--bad);border-color:#EBC7C4"{% endif %}>Former ({{ former_count }})</a>
   <a class="btn sm {% if status == 'all' %}dark{% endif %}" href="?status=all">All</a>
 </div>
 
@@ -27,9 +28,10 @@
 <div class="card"><div class="bd flush"><div class="table-wrap"><table>
   <thead><tr><th>Employee</th><th>Department</th><th>RFID card ID</th><th>Device user ID</th><th>Shift</th><th>Status</th><th></th></tr></thead>
   <tbody>{% for e in employees %}
-    <tr>
+    <tr class="{% if not e.is_active %}is-former{% endif %}">
       <td><div class="emp">{% include "partials/_avatar.html" with person=e %}<div>
-        <b>{{ e.display_name }}</b><span>{{ e.employee_id }} · {{ e.designation|default:"—" }}</span></div></div></td>
+        <b>{{ e.display_name }}</b>{% if not e.is_active %}<span class="former-tag">left</span>{% endif %}
+        <span>{{ e.employee_id }} · {{ e.designation|default:"—" }}</span></div></div></td>
       <td class="small">{{ e.department|default:"—" }}</td>
       <td>{% if e.rfid_card_no %}<span class="mono">{{ e.rfid_card_no }}</span>
           {% else %}<span class="badge bad">no card</span>{% endif %}</td>
@@ -37,7 +39,19 @@
       <td class="small">{{ e.shift.name|default:"default" }}</td>
       <td><span class="badge {{ e.status_badge }}">{{ e.employment_status }}</span>
         {% if e.exit_date %}<div class="tiny muted">left {{ e.exit_date|date:"d M Y" }}</div>{% endif %}</td>
-      <td><a class="btn sm" href="{% url 'accounts:employee_detail' e.pk %}">Details</a></td>
+      <td style="white-space:nowrap">
+        <a class="btn sm" href="{% url 'accounts:employee_detail' e.pk %}">Details</a>
+        {% if e.is_active %}
+          {% if e != user %}
+            <a class="btn sm danger" href="{% url 'accounts:employee_deactivate' e.pk %}"
+               title="Record that this person has left">Deactivate</a>
+          {% endif %}
+        {% else %}
+          <form method="post" action="{% url 'accounts:employee_reactivate' e.pk %}" style="display:inline"
+                onsubmit="return confirm('Turn {{ e.display_name }}\'s account back on?')">
+            {% csrf_token %}<button class="btn sm ok">Reactivate</button></form>
+        {% endif %}
+      </td>
     </tr>
   {% empty %}<tr><td colspan="7"><div class="empty"><b>No employees found</b>Try changing the filters.</div></td></tr>{% endfor %}
   </tbody></table></div></div></div>

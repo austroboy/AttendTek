@@ -126,10 +126,12 @@
       {% if not pending_leave_list and not pending_home_list %}<div class="tiny muted">Nothing pending.</div>{% endif %}
     </div></div>
 
-    {% if no_card or unmatched_punches or unexplained_trips %}
+    {% if no_card or unmatched_punches or unexplained_trips or former_with_cards %}
     <div class="card"><div class="hd"><h3>Needs attention</h3></div><div class="bd">
       {% if no_card %}<div class="kv"><span>No card assigned</span>
         <a class="tiny" href="{% url 'accounts:card_board' %}?card=missing">{{ no_card }} people</a></div>{% endif %}
+      {% if former_with_cards %}<div class="kv"><span style="color:var(--bad)">Former staff still holding a card</span>
+        <a class="tiny" href="{% url 'accounts:employee_list' %}?status=former">{{ former_with_cards }}</a></div>{% endif %}
       {% if unexplained_trips %}<div class="kv"><span>Trips with no purpose</span>
         <a class="tiny" href="{% url 'reports:outings' %}?purpose=UNSPECIFIED">{{ unexplained_trips }}</a></div>{% endif %}
       {% if unmatched_punches %}<div class="kv"><span>Unmatched punch</span>
