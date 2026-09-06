@@ -66,13 +66,55 @@ img.avatar{object-fit:cover}
 .avatar.lg{width:64px;height:64px;flex:0 0 64px;font-size:22px}
 .avatar.xl{width:104px;height:104px;flex:0 0 104px;font-size:34px;border:3px solid #fff;box-shadow:0 2px 12px rgba(18,49,78,.18)}
 
-/* profile header */
-.profile-head{background:linear-gradient(135deg,var(--ink) 0%,var(--ink-3) 100%);border-radius:var(--radius) var(--radius) 0 0;height:96px}
-.profile-body{padding:0 20px 18px;margin-top:-52px}
-.profile-body h2{color:var(--text);margin-top:10px}
-.profile-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.photo-picker{display:flex;gap:14px;align-items:center;padding:12px;border:1px dashed var(--line-2);border-radius:var(--radius-sm);background:#FAFBFC}
-.photo-picker input[type=file]{font-size:12.5px}
+/* ---------- profile header ---------- */
+.profile-card{border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);background:var(--card);box-shadow:var(--shadow)}
+.profile-head{
+  position:relative;padding:26px 26px 22px;
+  background:
+    radial-gradient(900px 200px at 88% -40%, rgba(240,122,43,.30), transparent 60%),
+    linear-gradient(135deg,var(--ink) 0%, var(--ink-2) 55%, var(--ink-3) 100%);
+  display:flex;gap:20px;align-items:center;flex-wrap:wrap;
+}
+.profile-head::after{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px);
+  background-size:18px 18px;
+}
+.profile-head>*{position:relative;z-index:1}
+.profile-id{min-width:0;flex:1}
+.profile-id h2{color:#fff;font-size:25px;line-height:1.2;letter-spacing:-.02em}
+.profile-id .role{color:#B7CEE4;font-size:13.5px;margin-top:3px}
+.profile-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:12px}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:20px;
+  font-size:11.5px;font-weight:500;background:rgba(255,255,255,.12);color:#DCE9F5;
+  border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(2px);
+}
+.chip.warn{background:rgba(240,122,43,.18);color:#FFD3B0;border-color:rgba(240,122,43,.35)}
+.chip.ok{background:rgba(27,143,92,.20);color:#B6E7CD;border-color:rgba(27,143,92,.38)}
+.chip .mono{font-family:"IBM Plex Mono",monospace}
+.profile-stats{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--line)}
+.profile-stats div{padding:14px 16px;text-align:center;border-right:1px solid var(--line)}
+.profile-stats div:last-child{border-right:none}
+.profile-stats .v{font-family:"IBM Plex Mono",monospace;font-size:21px;line-height:1.1}
+.profile-stats .l{font-size:11px;color:var(--text-3);margin-top:3px}
+
+/* ---------- photo picker ---------- */
+.photo-picker{display:flex;gap:16px;align-items:center;padding:16px;border:1px dashed var(--line-2);border-radius:var(--radius-sm);background:#FAFBFC}
+.photo-picker .hint{font-size:12px;color:var(--text-3);margin-top:6px}
+.photo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.file-btn{cursor:pointer}
+.remove-row{display:flex;gap:7px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--text-2)}
+
+/* ---------- sidebar profile card ---------- */
+.rail .me-card{
+  display:flex;gap:10px;align-items:center;padding:10px;border-radius:var(--radius-sm);
+  background:var(--ink-2);border:1px solid #234A70;text-decoration:none;margin-bottom:8px;
+}
+.rail .me-card:hover{background:var(--ink-3);text-decoration:none}
+.rail .me-card b{color:#fff;font-size:13px;display:block;line-height:1.25;font-weight:600}
+.rail .me-card span{color:#8AA4BE;font-size:11px;display:block;line-height:1.3}
+.rail .me-card .go{margin-left:auto;color:#6C88A6;font-size:15px}
 
 .main{flex:1;min-width:0;display:flex;flex-direction:column}
 .topbar{

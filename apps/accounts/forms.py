@@ -106,11 +106,21 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
     are reached and how they look, not what they are paid for.
     """
 
+    # Django's default file widget prints "Currently: employees/x.jpeg / Clear /
+    # Change:" which is fine for the admin site and ugly on a profile page.
+    # A plain FileInput plus our own checkbox gives us the whole look.
+    photo = forms.ImageField(
+        required=False,
+        widget=forms.FileInput(attrs={"accept": "image/*", "id": "photo-input", "hidden": True}),
+    )
+    remove_photo = forms.BooleanField(
+        required=False, label="Remove my photo",
+        widget=forms.CheckboxInput(attrs={"id": "remove-photo"}),
+    )
+
     class Meta:
         model = User
         fields = ["first_name", "last_name", "email", "phone", "photo"]
-        labels = {"photo": "Profile photo"}
-        help_texts = {"photo": "A square picture works best. Up to 5 MB."}
 
     def clean_photo(self):
         photo = self.cleaned_data.get("photo")
@@ -118,6 +128,15 @@ class ProfileForm(StyledFormMixin, forms.ModelForm):
         if photo and hasattr(photo, "size") and photo.size > 5 * 1024 * 1024:
             raise forms.ValidationError("That image is over 5 MB. Please pick a smaller one.")
         return photo
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        if self.cleaned_data.get("remove_photo"):
+            user.photo.delete(save=False)
+            user.photo = None
+        if commit:
+            user.save()
+        return user
 
 
 class ChangePasswordForm(StyledFormMixin, PasswordChangeForm):

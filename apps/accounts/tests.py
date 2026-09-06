@@ -126,3 +126,41 @@ class ProfileTests(TestCase):
         response = self.client.get("/accounts/profile/")
         self.assertEqual(response.status_code, 302)
         self.assertIn("login", response.url)
+
+    def test_photo_can_be_removed(self):
+        """The 'remove my photo' checkbox puts the initials back."""
+        self.client.post("/accounts/profile/", {
+            "form": "profile", "first_name": "Ashfaqur", "last_name": "Rahman",
+            "email": "a@example.com", "phone": "", "photo": a_png(),
+        }, follow=True)
+        self.emp.refresh_from_db()
+        self.assertTrue(self.emp.photo)
+
+        self.client.post("/accounts/profile/", {
+            "form": "profile", "first_name": "Ashfaqur", "last_name": "Rahman",
+            "email": "a@example.com", "phone": "", "remove_photo": "on",
+        }, follow=True)
+        self.emp.refresh_from_db()
+        self.assertFalse(self.emp.photo)
+
+    def test_saving_other_details_keeps_the_existing_photo(self):
+        """A plain save must not wipe the picture just because no file was picked."""
+        self.client.post("/accounts/profile/", {
+            "form": "profile", "first_name": "Ashfaqur", "last_name": "Rahman",
+            "email": "a@example.com", "phone": "", "photo": a_png(),
+        }, follow=True)
+        self.emp.refresh_from_db()
+        original = self.emp.photo.name
+
+        self.client.post("/accounts/profile/", {
+            "form": "profile", "first_name": "Ashfaqur", "last_name": "Rahman",
+            "email": "changed@example.com", "phone": "01755556666",
+        }, follow=True)
+        self.emp.refresh_from_db()
+        self.assertEqual(self.emp.photo.name, original)
+        self.assertEqual(self.emp.email, "changed@example.com")
+
+    def test_sidebar_links_to_the_profile(self):
+        response = self.client.get("/attendance/me/")
+        self.assertContains(response, 'href="/accounts/profile/"')
+        self.assertContains(response, "me-card")

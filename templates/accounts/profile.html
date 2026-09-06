@@ -3,28 +3,37 @@
 {% block eyebrow %}Account{% endblock %}{% block heading %}My profile{% endblock %}
 
 {% block content %}
-<div class="grid g-side">
-  <div class="stack">
-
-    <div class="card" style="overflow:hidden">
-      <div class="profile-head"></div>
-      <div class="profile-body">
-        <div class="row" style="align-items:flex-end;gap:16px">
-          {% include "partials/_avatar.html" with person=user size="xl" %}
-          <div style="flex:1;min-width:0;padding-bottom:4px">
-            <h2 style="font-size:22px">{{ user.display_name }}</h2>
-            <div class="small muted">{{ user.designation|default:"Employee" }}{% if user.department %} · {{ user.department }}{% endif %}</div>
-            <div class="profile-meta">
-              <span class="badge muted"><i class="dot"></i>{{ user.employee_id|default:"No employee ID" }}</span>
-              <span class="badge {% if user.work_policy == 'OFFICE' %}muted{% else %}info{% endif %}">{{ user.get_work_policy_display }}</span>
-              {% if user.is_manager %}<span class="badge ok">{{ user.get_role_display }}</span>{% endif %}
-              {% if user.rfid_card_no %}<span class="badge ok">Card assigned</span>
-              {% else %}<span class="badge warn">No card yet</span>{% endif %}
-            </div>
-          </div>
-        </div>
+<div class="profile-card" style="margin-bottom:14px">
+  <div class="profile-head">
+    {% include "partials/_avatar.html" with person=user size="xl" %}
+    <div class="profile-id">
+      <h2>{{ user.display_name }}</h2>
+      <div class="role">
+        {{ user.designation|default:"Employee" }}{% if user.department %} · {{ user.department }}{% endif %}
+      </div>
+      <div class="profile-meta">
+        <span class="chip"><span class="mono">{{ user.employee_id|default:"No ID" }}</span></span>
+        <span class="chip">{{ user.get_work_policy_display }}</span>
+        {% if user.is_manager %}<span class="chip ok">{{ user.get_role_display }}</span>{% endif %}
+        {% if user.rfid_card_no %}
+          <span class="chip ok">Card <span class="mono">{{ user.rfid_card_no }}</span></span>
+        {% else %}
+          <span class="chip warn">No card yet</span>
+        {% endif %}
+        {% if tenure %}<span class="chip">{{ tenure }} here</span>{% endif %}
       </div>
     </div>
+  </div>
+  <div class="profile-stats">
+    <div><div class="v" style="color:var(--ok)">{{ summary.on_time }}</div><div class="l">On time</div></div>
+    <div><div class="v" style="color:var(--late)">{{ summary.late }}</div><div class="l">Late</div></div>
+    <div><div class="v" style="color:var(--bad)">{{ summary.absent }}</div><div class="l">Absent</div></div>
+    <div><div class="v" style="color:var(--accent)">{{ summary.worked_hours }}</div><div class="l">Hours this month</div></div>
+  </div>
+</div>
+
+<div class="grid g-side">
+  <div class="stack">
 
     <div class="card">
       <div class="hd"><h2>Your details</h2>
@@ -34,13 +43,29 @@
           <input type="hidden" name="form" value="profile">
 
           <div class="fgroup">
-            <label>{{ form.photo.label }}</label>
+            <label>Profile photo</label>
             <div class="photo-picker">
-              {% include "partials/_avatar.html" with person=user size="lg" %}
+              {% if user.photo %}
+                <img class="avatar lg" id="photo-preview" src="{{ user.photo.url }}" alt="">
+              {% else %}
+                <div class="avatar lg" id="photo-preview">{{ user.initials }}</div>
+              {% endif %}
               <div style="flex:1;min-width:0">
-                {{ form.photo }}
-                <div class="help">{{ form.photo.help_text }}</div>
+                <div class="photo-actions">
+                  <label class="btn sm file-btn" for="photo-input">
+                    {% if user.photo %}Change photo{% else %}Upload a photo{% endif %}
+                  </label>
+                  {{ form.photo }}
+                  <span class="tiny muted" id="photo-name">
+                    {% if user.photo %}Using your current picture{% else %}No photo chosen{% endif %}
+                  </span>
+                </div>
+                <div class="hint">A square picture works best. JPG or PNG, up to 5 MB.</div>
                 {% for e in form.photo.errors %}<div class="err">{{ e }}</div>{% endfor %}
+                {% if user.photo %}
+                  <div class="remove-row">{{ form.remove_photo }}
+                    <label for="remove-photo" style="margin:0">Remove my photo and go back to initials</label></div>
+                {% endif %}
               </div>
             </div>
           </div>
@@ -59,22 +84,9 @@
     </div>
 
     <div class="card">
-      <div class="hd"><h2>Change password</h2></div>
-      <div class="bd">
-        <form method="post">{% csrf_token %}
-          <input type="hidden" name="form" value="password">
-          {% include "partials/_form.html" with form=password_form %}
-          <button class="btn primary">Update password</button>
-        </form>
-        <p class="tiny muted" style="margin-top:12px">If an admin set your password for you,
-          change it here so nobody else knows it.</p>
-      </div>
-    </div>
-
-    <div class="card">
       <div class="hd"><h2>Last 7 days</h2>
         <a class="right tiny" href="{% url 'attendance:my_attendance' %}">Full attendance →</a></div>
-      <div class="bd flush"><table>
+      <div class="bd flush"><div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>In</th><th>Required out</th><th>Out</th><th>Worked</th><th>Status</th></tr></thead>
         <tbody>{% for r in recent %}<tr>
           <td class="mono small">{{ r.date|date:"D, d M" }}</td>
@@ -86,34 +98,56 @@
         </tr>{% empty %}
           <tr><td colspan="6"><div class="empty"><b>No attendance recorded yet</b></div></td></tr>
         {% endfor %}</tbody>
-      </table></div>
+      </table></div></div>
+    </div>
+
+    <div class="card">
+      <div class="hd"><h2>Change password</h2>
+        <span class="right tiny muted">at least 8 characters</span></div>
+      <div class="bd">
+        <form method="post">{% csrf_token %}
+          <input type="hidden" name="form" value="password">
+          <div class="form-grid">
+            <div class="fgroup full"><label for="id_old_password">Current password</label>
+              {{ password_form.old_password }}
+              {% for e in password_form.old_password.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+            <div class="fgroup"><label for="id_new_password1">New password</label>
+              {{ password_form.new_password1 }}
+              {% for e in password_form.new_password1.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+            <div class="fgroup"><label for="id_new_password2">New password again</label>
+              {{ password_form.new_password2 }}
+              {% for e in password_form.new_password2.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+          </div>
+          {% for e in password_form.non_field_errors %}<div class="msg error">{{ e }}</div>{% endfor %}
+          <button class="btn primary">Update password</button>
+        </form>
+        <p class="tiny muted" style="margin-top:12px">If an admin set your password for you,
+          change it here so nobody else knows it.</p>
+      </div>
     </div>
   </div>
 
   <div class="stack">
-    <div class="card"><div class="hd"><h3>{{ month_label }}</h3></div><div class="bd">
-      <div class="grid g-2" style="gap:10px;margin-bottom:12px">
-        <div class="stat ok"><div class="v">{{ summary.on_time }}</div><div class="l">On time</div></div>
-        <div class="stat late"><div class="v">{{ summary.late }}</div><div class="l">Late</div></div>
-        <div class="stat bad"><div class="v">{{ summary.absent }}</div><div class="l">Absent</div></div>
-        <div class="stat accent"><div class="v">{{ summary.worked_hours }}</div><div class="l">Hours</div></div>
-      </div>
+    <div class="card"><div class="hd"><h3>{{ month_label }}</h3>
+      <a class="right tiny" href="{% url 'attendance:my_attendance' %}">details →</a></div><div class="bd">
       <div class="kv"><span>Home office days</span><b>{{ summary.home_office }}</b></div>
       <div class="kv"><span>Early out</span><b>{{ summary.early_out }}</b></div>
-      <div class="kv"><span>Overtime</span><b>{{ summary.overtime_hours }} h</b></div>
+      <div class="kv"><span>Half days</span><b>{{ summary.half_day }}</b></div>
+      <div class="kv"><span>On leave</span><b>{{ summary.leave }}</b></div>
+      <div class="kv"><span>Overtime</span><b style="color:var(--ok)">{{ summary.overtime_hours }} h</b></div>
     </div></div>
 
     <div class="card"><div class="hd"><h3>Office details</h3>
       <span class="right tiny muted">set by admin</span></div><div class="bd">
-      <div class="kv"><span>Employee ID</span><b>{{ user.employee_id|default:"—" }}</b></div>
+      <div class="kv"><span>Employee ID</span><b class="mono">{{ user.employee_id|default:"—" }}</b></div>
       <div class="kv"><span>RFID card</span><b class="mono">{{ user.rfid_card_no|default:"not assigned" }}</b></div>
       <div class="kv"><span>Department</span><b>{{ user.department|default:"—" }}</b></div>
       <div class="kv"><span>Designation</span><b>{{ user.designation|default:"—" }}</b></div>
       <div class="kv"><span>Reports to</span><b>{{ user.manager.display_name|default:"—" }}</b></div>
       <div class="kv"><span>Shift</span><b>{{ user.effective_shift.name|default:"—" }}</b></div>
       <div class="kv"><span>Office hours</span><b class="mono">{{ user.effective_shift.start_time|time:"h:i A" }}–{{ user.effective_shift.end_time|time:"h:i A" }}</b></div>
+      <div class="kv"><span>Late after</span><b class="mono">{{ user.effective_shift.late_after|time:"h:i A" }}</b></div>
       <div class="kv"><span>Joined</span><b>{{ user.joining_date|date:"d M Y"|default:"—" }}</b></div>
-      {% if tenure %}<div class="kv"><span>With the company</span><b>{{ tenure }}</b></div>{% endif %}
       <p class="tiny muted" style="margin-top:10px">Something wrong here? Ask your office admin —
         these fields affect how your attendance is counted.</p>
     </div></div>
@@ -125,7 +159,10 @@
       <a class="btn block" href="{% url 'tasks:my_report' %}">My task report</a>
       <a class="btn block" style="margin-top:8px" href="{% url 'leaves:my_leaves' %}">My leave</a>
       <a class="btn block" style="margin-top:8px" href="{% url 'attendance:my_outings' %}">My trips</a>
+      <a class="btn block" style="margin-top:8px" href="{% url 'attendance:self_punch' %}">Punch in / out</a>
     </div></div>
   </div>
 </div>
+
+<script src="{% static 'js/photo-picker.js' %}"></script>
 {% endblock %}

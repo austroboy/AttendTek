@@ -53,11 +53,15 @@
   <a class="nav {% nav_active 'attendance:home_office' %}" href="{% url 'attendance:home_office' %}">Home office</a>
 
   <div class="who">
-    {% include "partials/_avatar.html" with person=user %}
-    <div style="min-width:0">
-      <div class="small" style="color:#fff">{{ user.display_name }}</div>
-      <a class="tiny" href="{% url 'accounts:profile' %}" style="color:#7D949A">Profile</a>
-      · <a class="tiny" href="{% url 'accounts:logout' %}" style="color:#7D949A">Log out</a>
-    </div>
+    <a class="me-card {% nav_active 'accounts:profile' %}" href="{% url 'accounts:profile' %}"
+       title="Open my profile">
+      {% include "partials/_avatar.html" with person=user %}
+      <div style="min-width:0">
+        <b>{{ user.display_name }}</b>
+        <span>{{ user.designation|default:user.employee_id|default:"My profile" }}</span>
+      </div>
+      <span class="go">›</span>
+    </a>
+    <a class="tiny" href="{% url 'accounts:logout' %}" style="color:#8AA4BE;padding-left:4px">Log out</a>
   </div>
 </nav>
