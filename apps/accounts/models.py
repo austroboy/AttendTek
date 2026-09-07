@@ -253,3 +253,9 @@ class User(AbstractUser):
         if self.exit_date and day > self.exit_date:
             return False
         return True
+
+
+# The audit trail lives in its own module for readability; importing it here
+# keeps it inside the accounts app for migrations.
+from .activity import ActivityLog, log  # noqa: E402,F401
+from .throttle import LoginAttempt  # noqa: E402,F401

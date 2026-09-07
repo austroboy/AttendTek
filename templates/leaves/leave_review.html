@@ -6,21 +6,29 @@
   <a class="btn sm" href="?status=">All</a>
 </div>
 <div class="card"><div class="bd flush"><div class="table-wrap"><table>
-<thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th><th>Reason</th><th>Status</th><th></th></tr></thead>
-<tbody>{% for l in requests %}<tr>
+<thead><tr><th>Employee</th><th>Type</th><th>From</th><th>To</th><th>Days</th>
+  <th>Balance if approved</th><th>Reason</th><th>Status</th><th></th></tr></thead>
+<tbody>{% for row in rows %}{% with l=row.leave b=row.balance %}<tr>
   <td><div class="emp"><div class="avatar">{{ l.employee.initials }}</div><div>
     <b>{{ l.employee.display_name }}</b><span>{{ l.employee.employee_id }}</span></div></div></td>
   <td class="small">{{ l.leave_type.name }}</td>
   <td class="mono small">{{ l.start_date|date:"d M y" }}</td>
   <td class="mono small">{{ l.end_date|date:"d M y" }}</td>
   <td class="mono">{{ l.total_days }}</td>
+  <td class="small">
+    {% if b.quota %}
+      <b class="mono {% if b.exceeds %}"style="color:var(--bad)"{% endif %}">{{ b.left_after }}</b>
+      <span class="tiny muted">of {{ b.quota }} left in {{ b.year }}</span>
+      {% if b.exceeds %}<div class="badge bad">over quota by {{ b.over_by }}</div>{% endif %}
+    {% else %}<span class="tiny muted">no quota set</span>{% endif %}
+  </td>
   <td class="small">{{ l.reason|truncatechars:60 }}</td>
   <td><span class="badge {{ l.badge_class }}">{{ l.get_status_display }}</span></td>
   <td>{% if l.status == 'PENDING' %}
     <form method="post" action="{% url 'leaves:decide' l.pk 'approve' %}" style="display:inline">{% csrf_token %}<button class="btn sm ok">Approve</button></form>
     <form method="post" action="{% url 'leaves:decide' l.pk 'reject' %}" style="display:inline">{% csrf_token %}<button class="btn sm danger">Reject</button></form>
   {% else %}<span class="tiny muted">{{ l.reviewed_by.display_name|default:"" }}</span>{% endif %}</td>
-</tr>{% empty %}<tr><td colspan="8"><div class="empty"><b>No requests</b></div></td></tr>{% endfor %}
+</tr>{% endwith %}{% empty %}<tr><td colspan="9"><div class="empty"><b>No requests</b></div></td></tr>{% endfor %}
 </tbody></table></div></div></div>
 {% include "partials/_pagination.html" %}
 {% endblock %}

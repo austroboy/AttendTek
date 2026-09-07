@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Activity log{% endblock %}
+{% block eyebrow %}Setup{% endblock %}{% block heading %}Activity log{% endblock %}
+
+{% block content %}
+<div class="msg info">
+  Every change an admin makes to somebody's attendance is recorded here — edits, manual punches,
+  approved corrections, leave decisions, card changes and deactivations. Attendance feeds payroll,
+  so a decision may need explaining months after it was made.
+</div>
+
+<div class="row" style="margin-bottom:14px">
+  <a class="btn sm {% if not action %}dark{% endif %}" href="?">All</a>
+  {% for value, name in actions %}
+    <a class="btn sm {% if action == value %}dark{% endif %}" href="?action={{ value }}">{{ name }}</a>
+  {% endfor %}
+</div>
+
+<div class="card"><div class="bd flush"><div class="table-wrap"><table>
+  <thead><tr><th>When</th><th>Who did it</th><th>What</th><th>Whose record</th><th>Details</th></tr></thead>
+  <tbody>{% for l in logs %}<tr>
+    <td class="mono small">{{ l.created_at|date:"d M Y, h:i A" }}</td>
+    <td class="small">{{ l.actor.display_name|default:"system" }}</td>
+    <td><span class="badge {{ l.badge_class }}">{{ l.get_action_display }}</span></td>
+    <td class="small">{{ l.target.display_name|default:"—" }}
+      {% if l.subject %}<div class="tiny muted">{{ l.subject }}</div>{% endif %}</td>
+    <td class="tiny muted">{{ l.detail|default:"—" }}</td>
+  </tr>{% empty %}
+    <tr><td colspan="5"><div class="empty"><b>Nothing recorded yet</b>
+      Entries appear as soon as an admin changes somebody's record.</div></td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% include "partials/_pagination.html" %}</div></div>
+{% endblock %}

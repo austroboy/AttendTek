@@ -15,7 +15,9 @@ from apps.utils import paginate
 from .forms import (CardAssignForm, ChangePasswordForm, DeactivateEmployeeForm,
                     DepartmentForm, DesignationForm, EmployeeForm, LoginForm,
                     ProfileForm, ShiftForm)
-from .models import Department, Designation, Shift, User
+from .models import ActivityLog, Department, Designation, Shift, User
+from . import throttle
+from .activity import log as log_activity
 from .offboarding import deactivate_employee, reactivate_employee
 from .permissions import manager_required
 
@@ -28,10 +30,43 @@ def root_redirect(request):
     return redirect("attendance:my_portal")
 
 
+def _client_ip(request):
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
 class AppLoginView(LoginView):
     template_name = "registration/login.html"
     authentication_form = LoginForm
     redirect_authenticated_user = True
+
+    def post(self, request, *args, **kwargs):
+        username = request.POST.get("username", "")
+        ip = _client_ip(request)
+        if throttle.is_locked(username, ip):
+            wait = throttle.minutes_left(username, ip)
+            messages.error(
+                request,
+                f"Too many failed sign-in attempts. Please wait {wait} minute"
+                f"{'s' if wait != 1 else ''} and try again, or ask your office admin "
+                f"to reset your password.",
+            )
+            return self.render_to_response(self.get_context_data(form=self.get_form()))
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        throttle.clear(form.cleaned_data.get("username", ""), _client_ip(self.request))
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        throttle.record_failure(
+            self.request.POST.get("username", ""),
+            _client_ip(self.request),
+            self.request.META.get("HTTP_USER_AGENT", ""),
+        )
+        return super().form_invalid(form)
 
 
 def logout_view(request):
@@ -105,7 +140,11 @@ def employee_detail(request, pk):
     today = app_today()
     card_form = CardAssignForm(request.POST or None, instance=emp)
     if request.method == "POST" and card_form.is_valid():
+        before = User.objects.get(pk=emp.pk).rfid_card_no
         card_form.save()
+        if before != emp.rfid_card_no:
+            log_activity(request.user, ActivityLog.Action.CARD_CHANGED, target=emp,
+                         detail=f"{before or 'none'} → {emp.rfid_card_no or 'none'}")
         messages.success(request, f"Card ID saved: {emp.rfid_card_no}")
         return redirect("accounts:employee_detail", pk=emp.pk)
     return render(request, "accounts/employee_detail.html", {
@@ -141,6 +180,9 @@ def employee_deactivate(request, pk):
             note=form.cleaned_data["note"],
             cancel_pending=form.cleaned_data["cancel_pending"],
         )
+        log_activity(request.user, ActivityLog.Action.EMPLOYEE_DEACTIVATED, target=emp,
+                     subject=f"last day {form.cleaned_data['exit_date']:%d %b %Y}",
+                     detail=f"{form.cleaned_data['reason']} · {form.cleaned_data['note']}")
         messages.success(
             request,
             f"{emp.display_name} has been deactivated. "
@@ -162,6 +204,7 @@ def employee_reactivate(request, pk):
     emp = get_object_or_404(User, pk=pk)
     if request.method == "POST":
         reactivate_employee(emp, by=request.user)
+        log_activity(request.user, ActivityLog.Action.EMPLOYEE_REACTIVATED, target=emp)
         messages.success(
             request,
             f"{emp.display_name} is active again. Attendance will be counted from today.",
@@ -296,3 +339,17 @@ def designation_form(request):
         messages.success(request, "Designation added.")
         return redirect("accounts:settings")
     return render(request, "settings/simple_form.html", {"form": form, "title": "Add designation"})
+
+
+@manager_required
+def activity_log(request):
+    """Who changed what. Read when a number is questioned months later."""
+    action = request.GET.get("action", "")
+    logs = ActivityLog.objects.select_related("actor", "target")
+    if action:
+        logs = logs.filter(action=action)
+    page = paginate(request, logs, per_page=50)
+    return render(request, "settings/activity_log.html", {
+        "page": page, "logs": page.object_list, "action": action,
+        "actions": ActivityLog.Action.choices,
+    })

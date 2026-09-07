@@ -19,6 +19,8 @@
     <div class="group">Requests</div>
     <a class="nav {% nav_active 'leaves:review' %}" href="{% url 'leaves:review' %}">Leave approvals
       {% if pending_leaves %}<span class="pill">{{ pending_leaves }}</span>{% endif %}</a>
+    <a class="nav {% nav_active 'attendance:correction_review' %}" href="{% url 'attendance:correction_review' %}">Attendance fixes
+      {% if pending_corrections %}<span class="pill">{{ pending_corrections }}</span>{% endif %}</a>
     <a class="nav {% nav_active 'attendance:home_office_review' %}" href="{% url 'attendance:home_office_review' %}">Home office
       {% if pending_home_office %}<span class="pill">{{ pending_home_office }}</span>{% endif %}</a>
 
@@ -38,6 +40,7 @@
     <a class="nav {% nav_active 'attendance:holidays' %}" href="{% url 'attendance:holidays' %}">Holidays</a>
     <a class="nav {% nav_active 'attendance:punch_settings' %}" href="{% url 'attendance:punch_settings' %}">Self punch &amp; GPS</a>
     <a class="nav {% nav_active 'leaves:types' %}" href="{% url 'leaves:types' %}">Leave types</a>
+    <a class="nav {% nav_active 'accounts:activity_log' %}" href="{% url 'accounts:activity_log' %}">Activity log</a>
   {% endif %}
 
   <div class="group">My portal</div>
@@ -49,6 +52,8 @@
   <a class="nav {% nav_active 'leaves:my_leaves' %}" href="{% url 'leaves:my_leaves' %}">My leave</a>
   <a class="nav {% nav_active 'leaves:team' %}" href="{% url 'leaves:team' %}">Who's on leave
     {% if out_today_count %}<span class="pill count">{{ out_today_count }}</span>{% endif %}</a>
+  <a class="nav {% nav_active 'attendance:my_corrections' %}" href="{% url 'attendance:my_corrections' %}">Fix my attendance
+    {% if my_fixable_days %}<span class="pill">{{ my_fixable_days }}</span>{% endif %}</a>
   <a class="nav {% nav_active 'attendance:my_outings' %}" href="{% url 'attendance:my_outings' %}">My trips
     {% if my_unlabelled_trips %}<span class="pill">{{ my_unlabelled_trips }}</span>{% endif %}</a>
   <a class="nav {% nav_active 'attendance:home_office' %}" href="{% url 'attendance:home_office' %}">Home office</a>

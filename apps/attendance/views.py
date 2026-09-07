@@ -3,6 +3,7 @@ from datetime import date as date_cls, datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_POST
 from django.db.models import Count, Q, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -17,13 +18,16 @@ from apps.tasks.models import DailyTask
 
 from .forms import (AttendanceOverrideForm, HolidayForm, HomeOfficeOutForm,
                     HomeOfficeReviewForm, HomeOfficeStartForm, ManualPunchForm,
+                    CorrectionDecisionForm, CorrectionRequestForm,
                     OfficeLocationForm, OutingAdminForm, OutingForm,
                     PunchPolicyForm, SelfPunchForm)
-from .models import (DailyAttendance, Holiday, HomeOfficeEntry, OfficeLocation,
-                     Outing, PunchLog, PunchPolicy)
+from .models import (AttendanceCorrection, DailyAttendance, Holiday, HomeOfficeEntry,
+                     OfficeLocation, Outing, PunchLog, PunchPolicy)
 from .rules import required_out_time
-from .services import (SelfPunchError, day_summary, mark_absentees, month_summary,
-                       punch_state, rebuild_day, record_punch, self_punch)
+from .services import (SelfPunchError, apply_correction, day_summary,
+                       days_needing_attention, mark_absentees, month_summary,
+                       punch_state, rebuild_day, record_punch, reject_correction,
+                       self_punch)
 
 
 def _parse_date(value, fallback=None):
@@ -139,6 +143,11 @@ def attendance_edit(request, pk):
         obj.save()
         if not obj.is_manual_override:
             rebuild_day(record.employee, record.date)
+        from apps.accounts.activity import ActivityLog, log as log_activity
+        log_activity(request.user, ActivityLog.Action.ATTENDANCE_EDITED, target=record.employee,
+                     subject=f"{record.date:%d %b %Y}",
+                     detail=f"in {obj.check_in:%I:%M %p} out {obj.check_out:%I:%M %p}"
+                            if obj.check_in and obj.check_out else obj.status)
         messages.success(request, "Attendance record updated.")
         return redirect("attendance:sheet")
     return render(request, "attendance/attendance_edit.html", {"form": form, "record": record})
@@ -165,6 +174,12 @@ def punch_log_list(request):
             source=PunchLog.Source.MANUAL,
             note=form.cleaned_data["note"] or f"Manual entry by {request.user.display_name}",
         )
+        if created:
+            from apps.accounts.activity import ActivityLog, log as log_activity
+            log_activity(request.user, ActivityLog.Action.PUNCH_ADDED,
+                         target=form.cleaned_data["employee"],
+                         subject=f"{form.punch_datetime:%d %b %Y %I:%M %p}",
+                         detail=form.cleaned_data["note"])
         messages.success(request, "Punch added." if created else "A punch already exists at that time.")
         return redirect(f"{request.path}?date={form.cleaned_data['punch_date']}")
     page = paginate(request, logs.order_by("punch_time"), per_page=50)
@@ -533,3 +548,87 @@ def office_delete(request, pk):
     office.save(update_fields=["is_active"])
     messages.info(request, f"{office.name} is now {'active' if office.is_active else 'off'}.")
     return redirect("attendance:punch_settings")
+
+
+# ================================================================ CORRECTIONS
+@login_required
+def my_corrections(request):
+    """Ask for a day to be fixed, and see what happened to earlier requests."""
+    me = request.user
+    form = CorrectionRequestForm(request.POST or None, employee=me)
+
+    if request.method == "POST" and form.is_valid():
+        correction = form.save(commit=False)
+        correction.employee = me
+        correction.save()
+        messages.success(
+            request,
+            f"Request sent for {correction.date:%d %b}. An admin will review it.",
+        )
+        return redirect("attendance:my_corrections")
+
+    mine = AttendanceCorrection.objects.filter(employee=me).select_related("reviewed_by")
+    page = paginate(request, mine, per_page=20)
+
+    return render(request, "attendance/my_corrections.html", {
+        "form": form,
+        "page": page,
+        "corrections": page.object_list,
+        "needs_attention": days_needing_attention(me),
+        "pending": mine.filter(status=AttendanceCorrection.Status.PENDING).count(),
+    })
+
+
+@login_required
+def cancel_correction(request, pk):
+    correction = get_object_or_404(AttendanceCorrection, pk=pk, employee=request.user)
+    if correction.is_open:
+        correction.status = AttendanceCorrection.Status.CANCELLED
+        correction.save()
+        messages.info(request, "Request cancelled.")
+    return redirect("attendance:my_corrections")
+
+
+@manager_required
+def correction_review(request):
+    status = request.GET.get("status", "PENDING")
+    qs = AttendanceCorrection.objects.select_related("employee", "reviewed_by")
+    if status:
+        qs = qs.filter(status=status)
+    page = paginate(request, qs, per_page=25)
+
+    rows = []
+    for correction in page.object_list:
+        rows.append({
+            "correction": correction,
+            "record": DailyAttendance.objects.filter(
+                employee=correction.employee, date=correction.date).first(),
+        })
+
+    return render(request, "attendance/correction_review.html", {
+        "page": page, "rows": rows, "status": status,
+        "counts": {s: AttendanceCorrection.objects.filter(status=s).count()
+                   for s, _ in AttendanceCorrection.Status.choices},
+    })
+
+
+@manager_required
+@require_POST
+def correction_decide(request, pk, decision):
+    correction = get_object_or_404(AttendanceCorrection, pk=pk)
+    if not correction.is_open:
+        messages.info(request, "That request has already been decided.")
+        return redirect("attendance:correction_review")
+
+    note = request.POST.get("review_note", "")
+    if decision == "approve":
+        record = apply_correction(correction, by=request.user, note=note)
+        messages.success(
+            request,
+            f"{correction.employee.display_name}'s {correction.date:%d %b} corrected — "
+            f"now {record.get_status_display().lower()}, {record.worked_display} worked.",
+        )
+    else:
+        reject_correction(correction, by=request.user, note=note)
+        messages.warning(request, "Request rejected. The day is unchanged.")
+    return redirect("attendance:correction_review")

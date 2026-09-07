@@ -123,7 +123,11 @@
         <div class="kv"><span>{{ h.employee.display_name }} · home office</span>
           <a class="tiny" href="{% url 'attendance:home_office_review' %}">{{ h.date|date:"d M" }}</a></div>
       {% endfor %}
-      {% if not pending_leave_list and not pending_home_list %}<div class="tiny muted">Nothing pending.</div>{% endif %}
+      {% if pending_corrections %}
+        <div class="kv"><span>Attendance fixes</span>
+          <a class="tiny" href="{% url 'attendance:correction_review' %}">{{ pending_corrections }} waiting</a></div>
+      {% endif %}
+      {% if not pending_leave_list and not pending_home_list and not pending_corrections %}<div class="tiny muted">Nothing pending.</div>{% endif %}
     </div></div>
 
     {% if no_card or unmatched_punches or unexplained_trips or former_with_cards %}

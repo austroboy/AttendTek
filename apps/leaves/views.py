@@ -12,6 +12,7 @@ from apps.accounts.permissions import manager_required
 
 from .forms import LeaveRequestForm, LeaveTypeForm
 from .models import LeaveRequest, LeaveType
+from .services import balance_for, check_request
 
 
 @login_required
@@ -26,13 +27,13 @@ def my_leaves(request):
         return redirect("leaves:my_leaves")
 
     requests_qs = me.leave_requests.select_related("leave_type", "reviewed_by")
-    used = {}
-    for lt in LeaveType.objects.all():
-        taken = sum(r.total_days for r in requests_qs.filter(leave_type=lt, status="APPROVED"))
-        used[lt] = {"taken": taken, "left": max(0, lt.annual_quota - taken), "quota": lt.annual_quota}
+    year = int(request.GET.get("year", app_today().year))
     page = paginate(request, requests_qs, per_page=20)
     return render(request, "leaves/my_leaves.html", {
-        "form": form, "page": page, "requests": page.object_list, "balance": used,
+        "form": form, "page": page, "requests": page.object_list,
+        "balance": balance_for(me, year),
+        "year": year,
+        "this_year": app_today().year,
     })
 
 
@@ -103,8 +104,9 @@ def leave_review(request):
     if status:
         qs = qs.filter(status=status)
     page = paginate(request, qs, per_page=25)
+    rows = [{"leave": leave, "balance": check_request(leave)} for leave in page.object_list]
     return render(request, "leaves/leave_review.html", {
-        "page": page, "requests": page.object_list, "status": status,
+        "page": page, "rows": rows, "requests": page.object_list, "status": status,
         "counts": {s: LeaveRequest.objects.filter(status=s).count()
                    for s, _ in LeaveRequest.Status.choices},
     })
@@ -113,7 +115,12 @@ def leave_review(request):
 @manager_required
 def leave_decide(request, pk, decision):
     leave = get_object_or_404(LeaveRequest, pk=pk)
+    from apps.accounts.activity import ActivityLog, log as log_activity
+
     note = request.POST.get("review_note", "")
+    log_activity(request.user, ActivityLog.Action.LEAVE_DECIDED, target=leave.employee,
+                 subject=f"{leave.leave_type.name} {leave.start_date:%d %b} – {leave.end_date:%d %b}",
+                 detail=f"{decision} · {note}")
     if decision == "approve":
         leave.approve(request.user, note)
         messages.success(request, f"{leave.employee.display_name}'s leave was approved.")

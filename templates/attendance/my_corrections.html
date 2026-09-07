@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Fix my attendance{% endblock %}
+{% block eyebrow %}My portal{% endblock %}{% block heading %}Fix my attendance{% endblock %}
+
+{% block content %}
+{% if needs_attention %}
+<div class="card" style="margin-bottom:14px;border-left:3px solid var(--late)">
+  <div class="hd"><h2>Days worth checking</h2>
+    <span class="right tiny muted">last 14 days</span></div>
+  <div class="bd flush"><table>
+    <thead><tr><th>Date</th><th>In</th><th>Out</th><th>Status</th><th></th></tr></thead>
+    <tbody>{% for r in needs_attention %}<tr>
+      <td class="mono small">{{ r.date|date:"D, d M" }}</td>
+      <td class="mono">{{ r.check_in|time:"h:i A"|default:"—" }}</td>
+      <td class="mono">{{ r.check_out|time:"h:i A"|default:"—" }}</td>
+      <td>{% include "partials/_badge.html" with record=r %}</td>
+      <td><a class="btn sm" href="?date={{ r.date|date:'Y-m-d' }}#fix">Ask for a fix</a></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="grid g-side">
+  <div class="card"><div class="hd"><h2>Your requests</h2>
+    {% if pending %}<span class="right badge warn">{{ pending }} waiting</span>{% endif %}</div>
+    <div class="bd flush"><div class="table-wrap"><table>
+      <thead><tr><th>Day</th><th>Asked for</th><th>Reason</th><th>Status</th><th>Reviewer's note</th><th></th></tr></thead>
+      <tbody>{% for c in corrections %}<tr>
+        <td class="mono small">{{ c.date|date:"d M Y" }}</td>
+        <td class="mono small">{{ c.summary }}</td>
+        <td class="small">{{ c.get_reason_display }}
+          <div class="tiny muted">{{ c.note|truncatechars:50 }}</div></td>
+        <td><span class="badge {{ c.badge_class }}">{{ c.get_status_display }}</span>
+          {% if c.reviewed_by %}<div class="tiny muted">by {{ c.reviewed_by.display_name }}</div>{% endif %}</td>
+        <td class="tiny muted">{{ c.review_note|default:"—" }}</td>
+        <td>{% if c.is_open %}<a class="tiny" href="{% url 'attendance:cancel_correction' c.pk %}">cancel</a>{% endif %}</td>
+      </tr>{% empty %}
+        <tr><td colspan="6"><div class="empty"><b>No requests yet</b>
+          If a day was recorded wrongly, ask for it to be fixed here.</div></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% include "partials/_pagination.html" %}</div>
+  </div>
+
+  <div class="card" style="align-self:start" id="fix">
+    <div class="hd"><h3>Ask for a fix</h3></div>
+    <div class="bd">
+      <form method="post">{% csrf_token %}
+        <div class="fgroup"><label for="{{ form.date.id_for_label }}">{{ form.date.label }}</label>
+          {{ form.date }}
+          {% for e in form.date.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        <div class="row" style="gap:8px">
+          <div class="fgroup" style="flex:1"><label for="{{ form.requested_in.id_for_label }}">In</label>
+            {{ form.requested_in }}<div class="help">leave blank to keep</div></div>
+          <div class="fgroup" style="flex:1"><label for="{{ form.requested_out.id_for_label }}">Out</label>
+            {{ form.requested_out }}<div class="help">leave blank to keep</div></div>
+        </div>
+        <div class="fgroup"><label for="{{ form.reason.id_for_label }}">{{ form.reason.label }}</label>
+          {{ form.reason }}</div>
+        <div class="fgroup"><label for="{{ form.note.id_for_label }}">{{ form.note.label }}</label>
+          {{ form.note }}
+          {% for e in form.note.errors %}<div class="err">{{ e }}</div>{% endfor %}</div>
+        {% for e in form.non_field_errors %}<div class="msg error">{{ e }}</div>{% endfor %}
+        <button class="btn primary block">Send request</button>
+      </form>
+      <p class="tiny muted" style="margin-top:12px">Say what actually happened — an admin has to
+        agree before anything changes, and the original times are kept either way.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -432,3 +432,208 @@ class PaginationTests(TestCase):
         totals = response.context["totals"]
         page = response.context["page"]
         self.assertEqual(totals["rows"], page.paginator.count)
+
+
+class CorrectionTests(TestCase):
+    """Employees asking for a mis-recorded day to be fixed."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), required_hours=9, half_day_hours=4,
+            is_default=True, weekend_days="4,5",
+        )
+        cls.emp = User.objects.create_user(
+            username="mainul", password="pw", employee_id="EMP-100", shift=cls.shift)
+        cls.admin = User.objects.create_user(
+            username="chief2", password="pw", employee_id="EMP-101",
+            role=User.Role.ADMIN, shift=cls.shift, is_attendance_tracked=False)
+
+    def a_day_with_no_out_punch(self):
+        record_punch(employee=self.emp, punch_time=datetime.combine(DAY, time(9, 5)))
+        return DailyAttendance.objects.get(employee=self.emp, date=DAY)
+
+    def test_a_forgotten_out_punch_costs_the_whole_day(self):
+        """Why this feature exists at all."""
+        record = self.a_day_with_no_out_punch()
+        self.assertEqual(record.status, S.MISSING_OUT)
+        self.assertEqual(record.worked_minutes, 0)
+
+    def test_approving_a_correction_fixes_the_day(self):
+        from .models import AttendanceCorrection
+        from .services import apply_correction
+
+        self.a_day_with_no_out_punch()
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 10),
+            reason="FORGOT_OUT", note="Left at ten past six")
+
+        record = apply_correction(correction, by=self.admin, note="Confirmed with the manager")
+
+        self.assertEqual(record.check_out.time(), time(18, 10))
+        self.assertEqual(record.status, S.PRESENT)
+        self.assertEqual(record.worked_minutes, 545)
+        self.assertTrue(record.is_manual_override)
+
+    def test_the_original_times_are_kept(self):
+        from .models import AttendanceCorrection
+        from .services import apply_correction
+
+        self.a_day_with_no_out_punch()
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 10),
+            reason="FORGOT_OUT", note="x")
+        apply_correction(correction, by=self.admin)
+        correction.refresh_from_db()
+
+        self.assertEqual(correction.original_in.time(), time(9, 5))
+        self.assertIsNone(correction.original_out)
+        self.assertEqual(correction.original_status, S.MISSING_OUT)
+
+    def test_a_corrected_day_survives_the_nightly_rebuild(self):
+        """Without the override flag the fix would be silently undone."""
+        from .models import AttendanceCorrection
+        from .services import apply_correction
+
+        self.a_day_with_no_out_punch()
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 10),
+            reason="FORGOT_OUT", note="x")
+        apply_correction(correction, by=self.admin)
+
+        rebuild_day(self.emp, DAY)
+        record = DailyAttendance.objects.get(employee=self.emp, date=DAY)
+        self.assertEqual(record.check_out.time(), time(18, 10))
+
+    def test_a_correction_still_judges_lateness(self):
+        """Corrections fix the record, they do not excuse arriving late."""
+        from .models import AttendanceCorrection
+        from .services import apply_correction
+
+        record_punch(employee=self.emp, punch_time=datetime.combine(DAY, time(10, 30)))
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 0),
+            reason="FORGOT_OUT", note="x")
+        record = apply_correction(correction, by=self.admin)
+
+        self.assertTrue(record.is_late)
+        self.assertEqual(record.required_out.time(), time(19, 30))
+        self.assertTrue(record.is_early_out)
+
+    def test_rejecting_leaves_the_day_alone(self):
+        from .models import AttendanceCorrection
+        from .services import reject_correction
+
+        record = self.a_day_with_no_out_punch()
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(23, 0),
+            reason="FORGOT_OUT", note="x")
+        reject_correction(correction, by=self.admin, note="Office closes at 7")
+
+        record.refresh_from_db()
+        self.assertEqual(record.status, S.MISSING_OUT)
+        self.assertIsNone(record.check_out)
+
+    def test_every_decision_is_recorded(self):
+        from apps.accounts.models import ActivityLog
+        from .models import AttendanceCorrection
+        from .services import apply_correction
+
+        self.a_day_with_no_out_punch()
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 10),
+            reason="FORGOT_OUT", note="x")
+        apply_correction(correction, by=self.admin)
+
+        entry = ActivityLog.objects.filter(action=ActivityLog.Action.CORRECTION_APPROVED).first()
+        self.assertIsNotNone(entry)
+        self.assertEqual(entry.actor, self.admin)
+        self.assertEqual(entry.target, self.emp)
+
+    def test_only_one_pending_request_per_day(self):
+        from django.db import IntegrityError
+        from .models import AttendanceCorrection
+
+        AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 0), reason="OTHER", note="x")
+        with self.assertRaises(IntegrityError):
+            AttendanceCorrection.objects.create(
+                employee=self.emp, date=DAY, requested_out=time(19, 0), reason="OTHER", note="y")
+
+    def test_employees_cannot_decide_their_own_requests(self):
+        from .models import AttendanceCorrection
+
+        correction = AttendanceCorrection.objects.create(
+            employee=self.emp, date=DAY, requested_out=time(18, 0), reason="OTHER", note="x")
+        self.client.force_login(self.emp)
+        response = self.client.post(f"/attendance/corrections/{correction.pk}/approve/")
+        self.assertEqual(response.status_code, 403)
+        correction.refresh_from_db()
+        self.assertEqual(correction.status, "PENDING")
+
+    def test_problem_days_are_surfaced_to_the_employee(self):
+        from .services import days_needing_attention
+
+        self.a_day_with_no_out_punch()
+        self.assertIn(DAY, [r.date for r in days_needing_attention(self.emp, limit=400)])
+
+
+class LoginThrottleTests(TestCase):
+    """Password guessing has to get slower, without locking anyone out for good."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.shift = Shift.objects.create(
+            name="General", start_time=time(9, 0), end_time=time(18, 0),
+            late_after=time(10, 0), is_default=True)
+        cls.emp = User.objects.create_user(
+            username="target", password="RealPass123", employee_id="EMP-110", shift=cls.shift)
+
+    def guess(self, password="wrong"):
+        return self.client.post("/accounts/login/",
+                                {"username": "target", "password": password}, follow=True)
+
+    def test_repeated_wrong_passwords_get_blocked(self):
+        from apps.accounts.throttle import MAX_ATTEMPTS
+
+        for _ in range(MAX_ATTEMPTS):
+            self.guess()
+        response = self.guess()
+        self.assertContains(response, "Too many failed sign-in attempts")
+
+    def test_the_real_password_stops_working_while_locked(self):
+        """A lockout that the attacker can walk past is not a lockout."""
+        from apps.accounts.throttle import MAX_ATTEMPTS
+
+        for _ in range(MAX_ATTEMPTS):
+            self.guess()
+        response = self.guess("RealPass123")
+        self.assertFalse(response.context["user"].is_authenticated)
+
+    def test_a_correct_password_clears_the_count(self):
+        from apps.accounts.throttle import LoginAttempt
+
+        self.guess()
+        self.guess()
+        self.assertEqual(LoginAttempt.objects.count(), 2)
+        response = self.guess("RealPass123")
+        self.assertTrue(response.context["user"].is_authenticated)
+        self.assertEqual(LoginAttempt.objects.count(), 0)
+
+    def test_a_few_mistakes_are_forgiven(self):
+        self.guess()
+        self.guess()
+        response = self.guess("RealPass123")
+        self.assertTrue(response.context["user"].is_authenticated)
+
+    def test_old_attempts_are_pruned(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.accounts.throttle import LoginAttempt, prune
+
+        self.guess()
+        LoginAttempt.objects.update(created_at=timezone.now() - timedelta(days=30))
+        self.assertEqual(prune(days=7), 1)

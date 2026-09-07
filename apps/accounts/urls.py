@@ -16,6 +16,7 @@ urlpatterns = [
     path("employees/<int:pk>/reactivate/", views.employee_reactivate, name="employee_reactivate"),
     path("cards/", views.card_assign_board, name="card_board"),
     path("settings/", views.settings_home, name="settings"),
+    path("settings/activity/", views.activity_log, name="activity_log"),
     path("settings/shift/add/", views.shift_form, name="shift_create"),
     path("settings/shift/<int:pk>/", views.shift_form, name="shift_edit"),
     path("settings/department/add/", views.department_form, name="department_create"),

@@ -44,6 +44,14 @@
     </div>
     {% endif %}
 
+    {% if my_fixable_days %}
+    <div class="msg warning">
+      <b>{{ my_fixable_days }} recent day{{ my_fixable_days|pluralize }} look wrong.</b>
+      A missing out punch counts as no hours worked at all.
+      <a href="{% url 'attendance:my_corrections' %}">Ask for a fix →</a>
+    </div>
+    {% endif %}
+
     <div class="card">
       <div class="hd"><h2>Today's trips out</h2>
         <a class="right tiny" href="{% url 'attendance:my_outings' %}">All trips →</a></div>

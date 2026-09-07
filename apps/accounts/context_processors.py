@@ -22,14 +22,22 @@ def sidebar_badges(request):
         status=LeaveRequest.Status.APPROVED, start_date__lte=day, end_date__gte=day
     ).count()
 
-    from apps.attendance.models import Outing
+    from apps.attendance.models import AttendanceCorrection, Outing
 
     data["my_unlabelled_trips"] = Outing.objects.filter(
         employee=user, purpose=Outing.Purpose.UNSPECIFIED).count()
+
+    # Days the person could ask to have fixed - shown so a forgotten punch is
+    # noticed within days rather than at the end of the month.
+    from apps.attendance.services import days_needing_attention
+
+    data["my_fixable_days"] = len(days_needing_attention(user))
 
     if user.is_manager:
         data["unexplained_total"] = Outing.objects.filter(
             purpose=Outing.Purpose.UNSPECIFIED, date__gte=day - timedelta(days=30)).count()
         data["pending_leaves"] = LeaveRequest.objects.filter(status="PENDING").count()
+        data["pending_corrections"] = AttendanceCorrection.objects.filter(
+            status=AttendanceCorrection.Status.PENDING).count()
         data["pending_home_office"] = HomeOfficeEntry.objects.filter(status="PENDING").count()
     return data

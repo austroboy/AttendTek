@@ -22,10 +22,25 @@
     </tbody></table>
       {% include "partials/_pagination.html" %}</div></div>
 </div>
-<div class="card" style="align-self:start"><div class="hd"><h3>Leave balance</h3></div><div class="bd">
-  {% for lt, b in balance.items %}
-    <div class="kv"><span>{{ lt.name }}</span><b>{{ b.left }} / {{ b.quota }}</b></div>
+<div class="card" style="align-self:start"><div class="hd"><h3>Balance for {{ year }}</h3>
+  <span class="right">
+    <a class="tiny" href="?year={{ year|add:'-1' }}">‹ {{ year|add:'-1' }}</a>
+    {% if year < this_year %}· <a class="tiny" href="?year={{ year|add:'1' }}">{{ year|add:'1' }} ›</a>{% endif %}
+  </span></div><div class="bd">
+  {% for b in balance %}
+    <div style="margin-bottom:12px">
+      <div class="row" style="margin-bottom:4px">
+        <span class="small">{{ b.type.name }}</span>
+        <b class="right mono small {% if b.over %}
+            {% endif %}" style="{% if b.over %}color:var(--bad){% endif %}">
+          {{ b.left }} left</b>
+      </div>
+      <div style="height:6px;background:var(--muted-soft);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:{{ b.percent }}%;background:var(--{{ b.level }})"></div></div>
+      <span class="tiny muted">{{ b.used }} of {{ b.quota }} days used{% if b.over %} · {{ b.over }} over quota{% endif %}</span>
+    </div>
   {% empty %}<div class="tiny muted">An admin has not added any leave types yet.</div>{% endfor %}
-  <p class="tiny muted">Approved leave days show as "On leave" on your attendance instead of absent.</p>
+  <p class="tiny muted">Quotas reset each calendar year. Approved leave shows as "On leave"
+    on your attendance instead of absent.</p>
 </div></div></div>
 {% endblock %}

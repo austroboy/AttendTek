@@ -10,8 +10,8 @@ from apps.accounts.models import Shift, User
 from apps.leaves.models import LeaveRequest
 
 from .geo import classify
-from .models import (DailyAttendance, Holiday, HomeOfficeEntry, Outing,
-                     PunchPolicy, PunchLog)
+from .models import (AttendanceCorrection, DailyAttendance, Holiday, HomeOfficeEntry,
+                     Outing, PunchPolicy, PunchLog)
 from .rules import build_segments, evaluate_day
 
 
@@ -377,3 +377,115 @@ def punch_state(employee, day=None) -> dict:
         "last_punch": punches[-1] if punches else None,
         "policy": PunchPolicy.get_solo(),
     }
+
+
+# ------------------------------------------------------- attendance corrections
+def apply_correction(correction, *, by=None, note=""):
+    """Accept a correction and write the agreed times onto the day.
+
+    The corrected day is marked as a manual override so the nightly rebuild
+    leaves it alone - otherwise the next run would quietly undo the decision
+    and the employee would be back where they started.
+    """
+    from datetime import datetime
+
+    from apps.accounts.activity import ActivityLog, log
+    from django.utils import timezone as dj_timezone
+
+    from .rules import evaluate_day
+
+    employee = correction.employee
+    day = correction.date
+    shift = employee.effective_shift
+
+    record, _ = DailyAttendance.objects.get_or_create(
+        employee=employee, date=day, defaults={"shift": shift}
+    )
+
+    # Keep what the day looked like before, so the trail means something.
+    correction.original_in = record.check_in
+    correction.original_out = record.check_out
+    correction.original_status = record.status
+
+    check_in = (datetime.combine(day, correction.requested_in)
+                if correction.requested_in else record.check_in)
+    check_out = (datetime.combine(day, correction.requested_out)
+                 if correction.requested_out else record.check_out)
+
+    ev = evaluate_day(
+        shift, day, check_in, check_out,
+        mode=record.mode,
+        is_holiday=Holiday.objects.filter(date=day).exists(),
+        punch_count=record.punch_count,
+    )
+
+    record.shift = shift
+    record.check_in = ev.check_in
+    record.check_out = ev.check_out
+    record.required_out = ev.required_out
+    record.worked_minutes = ev.worked_minutes
+    record.inside_minutes = ev.inside_minutes
+    record.late_minutes = ev.late_minutes
+    record.early_out_minutes = ev.early_out_minutes
+    record.overtime_minutes = ev.overtime_minutes
+    record.shortfall_minutes = ev.shortfall_minutes
+    record.status = ev.status
+    record.is_late = ev.is_late
+    record.is_early_out = ev.is_early_out
+    record.is_manual_override = True
+    record.remarks = (f"Corrected on request ({correction.get_reason_display()})"
+                      f" · {ev.remark_text}")[:200]
+    record.save()
+
+    correction.status = AttendanceCorrection.Status.APPROVED
+    correction.reviewed_by = by
+    correction.review_note = note
+    correction.reviewed_at = dj_timezone.now()
+    correction.save()
+
+    log(by, ActivityLog.Action.CORRECTION_APPROVED, target=employee,
+        subject=f"{day:%d %b %Y}",
+        detail=(f"{correction.original_in:%I:%M %p} → {check_in:%I:%M %p}" if check_in else "")
+               + (f", out {check_out:%I:%M %p}" if check_out else ""))
+    return record
+
+
+def reject_correction(correction, *, by=None, note=""):
+    from apps.accounts.activity import ActivityLog, log
+    from django.utils import timezone as dj_timezone
+
+    correction.status = AttendanceCorrection.Status.REJECTED
+    correction.reviewed_by = by
+    correction.review_note = note
+    correction.reviewed_at = dj_timezone.now()
+    correction.save()
+    log(by, ActivityLog.Action.CORRECTION_REJECTED, target=correction.employee,
+        subject=f"{correction.date:%d %b %Y}", detail=note)
+    return correction
+
+
+def days_needing_attention(employee, limit=14):
+    """Recent days an employee might want corrected.
+
+    Surfacing these is the point: somebody who forgot to punch out three weeks
+    ago has no idea until payroll, by which time nobody remembers the day.
+    """
+    from datetime import timedelta
+
+    from apps.utils import today as _today
+
+    end = _today()
+    start = end - timedelta(days=limit)
+    problem = [DailyAttendance.Status.MISSING_OUT, DailyAttendance.Status.ABSENT,
+               DailyAttendance.Status.HALF_DAY]
+    pending = set(
+        AttendanceCorrection.objects.filter(
+            employee=employee, status=AttendanceCorrection.Status.PENDING
+        ).values_list("date", flat=True)
+    )
+    return [
+        record for record in DailyAttendance.objects.filter(
+            employee=employee, date__range=(start, end), status__in=problem
+        ).order_by("-date")
+        if record.date not in pending
+    ]

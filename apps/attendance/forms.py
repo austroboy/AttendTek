@@ -8,8 +8,8 @@ from apps.utils import now as app_now, today as app_today
 from apps.accounts.forms import StyledFormMixin
 from apps.accounts.models import User
 
-from .models import (DailyAttendance, Holiday, HomeOfficeEntry, OfficeLocation,
-                     Outing, PunchLog, PunchPolicy)
+from .models import (AttendanceCorrection, DailyAttendance, Holiday, HomeOfficeEntry,
+                     OfficeLocation, Outing, PunchLog, PunchPolicy)
 
 
 class HomeOfficeStartForm(StyledFormMixin, forms.ModelForm):
@@ -179,3 +179,64 @@ class PunchPolicyForm(StyledFormMixin, forms.ModelForm):
         model = PunchPolicy
         fields = ["self_punch_enabled", "require_location", "allow_outside_office",
                   "max_accuracy_m", "notice"]
+
+
+class CorrectionRequestForm(StyledFormMixin, forms.ModelForm):
+    """An employee asking for a day to be fixed."""
+
+    class Meta:
+        model = AttendanceCorrection
+        fields = ["date", "requested_in", "requested_out", "reason", "note"]
+        widgets = {
+            "date": forms.DateInput(attrs={"type": "date"}),
+            "requested_in": forms.TimeInput(attrs={"type": "time"}),
+            "requested_out": forms.TimeInput(attrs={"type": "time"}),
+            "note": forms.Textarea(attrs={"rows": 3}),
+        }
+        labels = {
+            "date": "Which day",
+            "requested_in": "Actual in time",
+            "requested_out": "Actual out time",
+            "reason": "What went wrong",
+            "note": "What actually happened",
+        }
+        help_texts = {
+            "requested_in": "Leave blank to keep what is already recorded",
+            "requested_out": "Leave blank to keep what is already recorded",
+        }
+
+    def __init__(self, *args, employee=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.employee = employee
+        from apps.utils import today
+        self.fields["date"].widget.attrs["max"] = today().isoformat()
+
+    def clean_date(self):
+        from apps.utils import today
+
+        day = self.cleaned_data["date"]
+        if day > today():
+            raise forms.ValidationError("You cannot ask to correct a day that has not happened.")
+        if self.employee and self.employee.joining_date and day < self.employee.joining_date:
+            raise forms.ValidationError("That date is before you joined.")
+        return day
+
+    def clean(self):
+        data = super().clean()
+        if not data.get("requested_in") and not data.get("requested_out"):
+            raise forms.ValidationError("Give at least one time - the in time, the out time, or both.")
+        if (data.get("requested_in") and data.get("requested_out")
+                and data["requested_out"] <= data["requested_in"]):
+            raise forms.ValidationError("The out time has to be after the in time.")
+
+        day = data.get("date")
+        if self.employee and day and AttendanceCorrection.objects.filter(
+            employee=self.employee, date=day, status=AttendanceCorrection.Status.PENDING
+        ).exists():
+            raise forms.ValidationError(
+                "You already have a request waiting for that day.")
+        return data
+
+
+class CorrectionDecisionForm(StyledFormMixin, forms.Form):
+    review_note = forms.CharField(required=False, max_length=200, label="Note (optional)")

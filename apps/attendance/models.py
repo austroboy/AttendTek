@@ -533,3 +533,83 @@ class PunchPolicy(models.Model):
         if obj is None:
             obj = cls.objects.create()
         return obj
+
+
+class AttendanceCorrection(models.Model):
+    """An employee's request to fix a day the machine got wrong.
+
+    People forget to punch out. The reader fails. Somebody is sent straight to
+    a client in the morning. Until now the only route was to catch the admin
+    and have them edit the raw record, which left no trace of who asked, why,
+    or what the day looked like beforehand. This turns that conversation into a
+    record: the employee states what actually happened, an admin agrees or does
+    not, and the original times are kept either way.
+    """
+
+    class Reason(models.TextChoices):
+        FORGOT_OUT = "FORGOT_OUT", "Forgot to punch out"
+        FORGOT_IN = "FORGOT_IN", "Forgot to punch in"
+        DEVICE_DOWN = "DEVICE_DOWN", "Card reader was not working"
+        FIELD_WORK = "FIELD_WORK", "Went straight to a client"
+        WRONG_TIME = "WRONG_TIME", "Recorded time is wrong"
+        OTHER = "OTHER", "Something else"
+
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Waiting for approval"
+        APPROVED = "APPROVED", "Approved"
+        REJECTED = "REJECTED", "Rejected"
+        CANCELLED = "CANCELLED", "Cancelled"
+
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="corrections"
+    )
+    date = models.DateField()
+    requested_in = models.TimeField(null=True, blank=True)
+    requested_out = models.TimeField(null=True, blank=True)
+    reason = models.CharField(max_length=12, choices=Reason.choices)
+    note = models.TextField(help_text="What actually happened that day")
+
+    # What the record said before anyone touched it, kept for the trail.
+    original_in = models.DateTimeField(null=True, blank=True)
+    original_out = models.DateTimeField(null=True, blank=True)
+    original_status = models.CharField(max_length=12, blank=True)
+
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="reviewed_corrections",
+    )
+    review_note = models.CharField(max_length=200, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-date", "-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["employee", "date"],
+                condition=models.Q(status="PENDING"),
+                name="one_pending_correction_per_day",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.employee.display_name} - correction for {self.date:%d %b %Y}"
+
+    @property
+    def badge_class(self):
+        return {"PENDING": "warn", "APPROVED": "ok",
+                "REJECTED": "bad", "CANCELLED": "muted"}[self.status]
+
+    @property
+    def is_open(self):
+        return self.status == self.Status.PENDING
+
+    @property
+    def summary(self):
+        parts = []
+        if self.requested_in:
+            parts.append(f"in {self.requested_in:%I:%M %p}")
+        if self.requested_out:
+            parts.append(f"out {self.requested_out:%I:%M %p}")
+        return " · ".join(parts) or "no times given"

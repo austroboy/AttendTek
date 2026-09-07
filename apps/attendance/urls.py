@@ -13,6 +13,8 @@ urlpatterns = [
     path("punches/<int:pk>/link/", views.punch_log_link, name="punch_link"),
     path("recalculate/", views.recalculate, name="recalculate"),
     path("home-office/review/", views.home_office_review, name="home_office_review"),
+    path("corrections/", views.correction_review, name="correction_review"),
+    path("corrections/<int:pk>/<str:decision>/", views.correction_decide, name="correction_decide"),
     path("home-office/<int:pk>/<str:decision>/", views.home_office_decide, name="home_office_decide"),
     path("holidays/", views.holiday_list, name="holidays"),
     path("punch-settings/", views.punch_settings, name="punch_settings"),
@@ -23,5 +25,7 @@ urlpatterns = [
     path("me/home-office/", views.home_office, name="home_office"),
     path("me/punch/", views.self_punch_view, name="self_punch"),
     path("me/trips/", views.my_outings, name="my_outings"),
+    path("me/corrections/", views.my_corrections, name="my_corrections"),
+    path("me/corrections/<int:pk>/cancel/", views.cancel_correction, name="cancel_correction"),
     path("trips/<int:pk>/edit/", views.outing_edit, name="outing_edit"),
 ]
