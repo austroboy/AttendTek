@@ -489,3 +489,42 @@ def days_needing_attention(employee, limit=14):
         ).order_by("-date")
         if record.date not in pending
     ]
+
+
+def attach_punch_locations(records):
+    """Attach the first IN punch and the last OUT punch to each attendance row.
+
+    The attendance sheet and the exports need to show where a person actually
+    punched from - the same information the punch log page shows. Doing it row
+    by row would be one query per row, so the whole batch is fetched at once
+    and matched up in memory.
+
+    Returns the records as a list, each with `in_punch` and `out_punch` set
+    (either a PunchLog or None).
+    """
+    records = list(records)
+    if not records:
+        return records
+
+    dates = [record.date for record in records]
+    punches = (PunchLog.objects
+               .filter(employee_id__in={record.employee_id for record in records},
+                       punch_time__date__range=(min(dates), max(dates)),
+                       is_ignored=False)
+               .select_related("office")
+               .order_by("punch_time"))
+
+    first_in: dict = {}
+    last_out: dict = {}
+    for punch in punches:
+        key = (punch.employee_id, punch.punch_time.date())
+        if punch.direction == PunchLog.Direction.IN:
+            first_in.setdefault(key, punch)
+        elif punch.direction == PunchLog.Direction.OUT:
+            last_out[key] = punch
+
+    for record in records:
+        key = (record.employee_id, record.date)
+        record.in_punch = first_in.get(key)
+        record.out_punch = last_out.get(key)
+    return records

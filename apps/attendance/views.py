@@ -24,10 +24,10 @@ from .forms import (AttendanceOverrideForm, HolidayForm, HomeOfficeOutForm,
 from .models import (AttendanceCorrection, DailyAttendance, Holiday, HomeOfficeEntry,
                      OfficeLocation, Outing, PunchLog, PunchPolicy)
 from .rules import required_out_time
-from .services import (SelfPunchError, apply_correction, day_summary,
-                       days_needing_attention, mark_absentees, month_summary,
-                       punch_state, rebuild_day, record_punch, reject_correction,
-                       self_punch)
+from .services import (SelfPunchError, apply_correction, attach_punch_locations,
+                       day_summary, days_needing_attention, mark_absentees,
+                       month_summary, punch_state, rebuild_day, record_punch,
+                       reject_correction, self_punch)
 
 
 def _parse_date(value, fallback=None):
@@ -114,10 +114,12 @@ def attendance_sheet(request):
         "absent": qs.filter(status=DailyAttendance.Status.ABSENT).count(),
     }
     page = paginate(request, qs, per_page=50)
+    # Where each person punched from, for the rows on screen only.
+    records = attach_punch_locations(page.object_list)
 
     return render(request, "attendance/attendance_sheet.html", {
         "page": page,
-        "records": page.object_list,
+        "records": records,
         "day_from": day_from, "day_to": day_to,
         "status": status, "dept": dept, "emp_id": emp_id,
         "statuses": DailyAttendance.Status.choices,

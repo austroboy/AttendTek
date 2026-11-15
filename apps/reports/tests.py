@@ -135,6 +135,88 @@ class ExportRangeTests(TestCase):
         self.assertIn("export/excel/?from=2026-01-01&amp;to=2026-11-15", html)
         self.assertIn("export/csv/?from=2026-01-01&amp;to=2026-11-15", html)
 
+    def test_export_shows_where_the_punch_came_from(self):
+        from openpyxl import load_workbook
+
+        from apps.attendance.models import OfficeLocation, PunchLog
+
+        office = OfficeLocation.objects.create(
+            name="TalenTracker Limited", latitude="23.816148", longitude="90.366637",
+            radius_m=100,
+        )
+        day = date(2026, 6, 10)
+        DailyAttendance.objects.create(
+            employee=self.emp_a, date=day,
+            check_in=datetime.combine(day, time(9, 27)),
+            check_out=datetime.combine(day, time(18, 30)),
+            required_out=datetime.combine(day, time(18, 0)),
+            status=DailyAttendance.Status.PRESENT,
+        )
+        PunchLog.objects.create(
+            employee=self.emp_a, punch_time=datetime.combine(day, time(9, 27)),
+            direction=PunchLog.Direction.IN, sequence=1, source=PunchLog.Source.SELF,
+            latitude="23.816200", longitude="90.366700", accuracy_m=21,
+            office=office, distance_m=25,
+            location_status=PunchLog.LocationStatus.INSIDE,
+        )
+        PunchLog.objects.create(
+            employee=self.emp_a, punch_time=datetime.combine(day, time(18, 30)),
+            direction=PunchLog.Direction.OUT, sequence=2, source=PunchLog.Source.SELF,
+            latitude="23.860000", longitude="90.400000", accuracy_m=20,
+            office=office, distance_m=5000,
+            location_status=PunchLog.LocationStatus.OUTSIDE,
+        )
+
+        response = self.client.get(
+            f"/reports/export/excel/?from=2026-06-10&to=2026-06-10&employee={self.emp_a.id}"
+        )
+        ws = load_workbook(BytesIO(response.content)).active
+        header = [c.value for c in ws[1]]
+        row = {header[i]: c.value for i, c in enumerate(ws[2])}
+
+        self.assertIn("At the office", row["In - where"])
+        self.assertIn("25 m from TalenTracker Limited", row["In - where"])
+        self.assertEqual(row["In - distance (m)"], 25)
+        self.assertIn("Away from the office", row["Out - where"])
+        self.assertIn("5.0 km from TalenTracker Limited", row["Out - where"])
+        self.assertEqual(row["Out - distance (m)"], 5000)
+
+    def test_sheet_shows_where_the_punch_came_from(self):
+        from apps.attendance.models import OfficeLocation, PunchLog
+
+        office = OfficeLocation.objects.create(
+            name="TalenTracker Limited", latitude="23.816148", longitude="90.366637",
+            radius_m=100,
+        )
+        day = date(2026, 7, 8)
+        DailyAttendance.objects.create(
+            employee=self.emp_a, date=day,
+            check_in=datetime.combine(day, time(9, 45)),
+            required_out=datetime.combine(day, time(18, 0)),
+            status=DailyAttendance.Status.PRESENT,
+        )
+        PunchLog.objects.create(
+            employee=self.emp_a, punch_time=datetime.combine(day, time(9, 45)),
+            direction=PunchLog.Direction.IN, sequence=1, source=PunchLog.Source.SELF,
+            latitude="23.860000", longitude="90.400000", accuracy_m=20,
+            office=office, distance_m=5000,
+            location_status=PunchLog.LocationStatus.OUTSIDE,
+        )
+        html = self.client.get("/attendance/sheet/?from=2026-07-08&to=2026-07-08").content.decode()
+        self.assertIn("Away from the office", html)
+        self.assertIn("5.0 km from TalenTracker Limited", html)
+
+    def test_locations_do_not_add_a_query_per_row(self):
+        """50 rows on screen must not mean 50 extra queries."""
+        from django.test.utils import CaptureQueriesContext
+        from django.db import connection
+
+        with CaptureQueriesContext(connection) as ctx:
+            response = self.client.get("/attendance/sheet/?from=2026-01-01&to=2026-11-15")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.context["records"]), 45)
+        self.assertLess(len(ctx.captured_queries), 30)
+
     def test_employee_cannot_export(self):
         self.client.get("/accounts/logout/")
         self.client.post("/accounts/login/", {"username": "emp_a", "password": "Pass@12345"})

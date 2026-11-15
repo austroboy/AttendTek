@@ -129,6 +129,24 @@ class PunchLog(models.Model):
         return f"{self.distance_m / 1000:.1f} km"
 
     @property
+    def where_text(self):
+        """Where this punch came from, as one plain line - used by the exports."""
+        if not self.has_location:
+            if self.source == self.Source.HOME:
+                return "Home office"
+            if self.source == self.Source.SELF:
+                return "Location not shared"
+            return "Card reader"
+        parts = [self.get_location_status_display()]
+        if self.office and self.distance_m is not None:
+            parts.append(f"{self.distance_display} from {self.office.name}")
+        else:
+            parts.append(f"{self.latitude}, {self.longitude}")
+        if self.accuracy_m:
+            parts.append(f"±{self.accuracy_m} m")
+        return " · ".join(parts)
+
+    @property
     def location_badge(self):
         return {
             self.LocationStatus.INSIDE: "ok",

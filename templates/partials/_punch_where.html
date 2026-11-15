@@ -1,0 +1,14 @@
+{% comment %}Where one punch came from. Same shape as the punch log page.
+Takes: p (a PunchLog), label ("In" or "Out").{% endcomment %}
+<div class="tiny" style="margin:2px 0">
+  <span class="muted mono">{{ label }}</span>
+  {% if p.has_location %}
+    <a href="{{ p.map_url }}" target="_blank" rel="noopener"
+       class="badge {{ p.location_badge }}">{{ p.get_location_status_display }}</a>
+    <div class="tiny muted mono">
+      {% if p.office %}{{ p.distance_display }} from {{ p.office.name }}{% else %}{{ p.latitude }}, {{ p.longitude }}{% endif %}
+      {% if p.accuracy_m %} · ±{{ p.accuracy_m }}m{% endif %}</div>
+  {% elif p.source == 'HOME' %}<span class="badge info">Home office</span>
+  {% elif p.source == 'SELF' %}<span class="badge bad">no location</span>
+  {% else %}<span class="muted">card reader</span>{% endif %}
+</div>

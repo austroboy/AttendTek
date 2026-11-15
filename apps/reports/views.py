@@ -14,7 +14,7 @@ from apps.utils import now as app_now, paginate, today as app_today
 from apps.accounts.models import Department, User
 from apps.accounts.permissions import manager_required
 from apps.attendance.models import DailyAttendance, Outing
-from apps.attendance.services import month_summary
+from apps.attendance.services import attach_punch_locations, month_summary
 from apps.tasks.models import DailyTask
 from apps.tasks.services import (PERIODS, employee_rows, period_bounds,
                                  shift_period, split_projects, summarise)
@@ -219,20 +219,46 @@ def department_report(request):
 
 
 # ------------------------------------------------------------------ exports
+EXPORT_HEADER = [
+    "Date", "Employee ID", "Name", "Department", "Mode",
+    "In", "In - where", "In - distance (m)",
+    "Required out",
+    "Out", "Out - where", "Out - distance (m)",
+    "Worked", "Late (min)", "Early out (min)", "Overtime (min)", "Status", "Remarks",
+]
+EXPORT_WIDTHS = [12, 12, 22, 16, 12, 11, 30, 16, 13, 11, 30, 16, 10, 10, 13, 13, 14, 36]
+
+
+def _export_batches(qs, size=500):
+    """Walk the rows in batches, so the punch locations cost one query per batch."""
+    batch = []
+    for record in qs.iterator(chunk_size=size):
+        batch.append(record)
+        if len(batch) >= size:
+            yield attach_punch_locations(batch)
+            batch = []
+    if batch:
+        yield attach_punch_locations(batch)
+
+
 def _export_rows(qs):
-    yield ["Date", "Employee ID", "Name", "Department", "Mode", "In", "Required out",
-           "Out", "Worked", "Late (min)", "Early out (min)", "Overtime (min)", "Status", "Remarks"]
-    for r in qs:
-        yield [
-            r.date.strftime("%Y-%m-%d"), r.employee.employee_id, r.employee.display_name,
-            r.employee.department.name if r.employee.department else "",
-            r.get_mode_display(),
-            r.check_in.strftime("%I:%M %p") if r.check_in else "",
-            r.required_out.strftime("%I:%M %p") if r.required_out else "",
-            r.check_out.strftime("%I:%M %p") if r.check_out else "",
-            r.worked_display, r.late_minutes, r.early_out_minutes, r.overtime_minutes,
-            r.get_status_display(), r.remarks,
-        ]
+    yield EXPORT_HEADER
+    for batch in _export_batches(qs):
+        for r in batch:
+            yield [
+                r.date.strftime("%Y-%m-%d"), r.employee.employee_id, r.employee.display_name,
+                r.employee.department.name if r.employee.department else "",
+                r.get_mode_display(),
+                r.check_in.strftime("%I:%M %p") if r.check_in else "",
+                r.in_punch.where_text if r.in_punch else "",
+                r.in_punch.distance_m if r.in_punch and r.in_punch.distance_m is not None else "",
+                r.required_out.strftime("%I:%M %p") if r.required_out else "",
+                r.check_out.strftime("%I:%M %p") if r.check_out else "",
+                r.out_punch.where_text if r.out_punch else "",
+                r.out_punch.distance_m if r.out_punch and r.out_punch.distance_m is not None else "",
+                r.worked_display, r.late_minutes, r.early_out_minutes, r.overtime_minutes,
+                r.get_status_display(), r.remarks,
+            ]
 
 
 @manager_required
@@ -266,8 +292,7 @@ def export_excel(request):
                 cell.font = Font(bold=True, color="FFFFFF")
                 cell.fill = header_fill
                 cell.alignment = Alignment(horizontal="center")
-    widths = [12, 12, 22, 16, 12, 11, 13, 11, 10, 10, 12, 12, 14, 40]
-    for col, w in zip(ws.columns, widths):
+    for col, w in zip(ws.columns, EXPORT_WIDTHS):
         ws.column_dimensions[col[0].column_letter].width = w
     ws.freeze_panes = "A2"
 
