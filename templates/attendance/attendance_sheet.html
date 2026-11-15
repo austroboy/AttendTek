@@ -12,7 +12,9 @@
   <div class="fgroup"><label>Employee</label><select class="field" name="employee"><option value="">All</option>
     {% for e in employees %}<option value="{{ e.id }}" {% if emp_id == e.id|stringformat:'s' %}selected{% endif %}>{{ e.display_name }}</option>{% endfor %}</select></div>
   <button class="btn primary">Filter</button>
-  <a class="btn right" href="{% url 'reports:export_excel' %}">Excel export</a>
+  {% comment %}Exports carry the same filters, so the file matches the screen.{% endcomment %}
+  <a class="btn right" href="{% url 'reports:export_excel' %}?from={{ day_from|date:'Y-m-d' }}&amp;to={{ day_to|date:'Y-m-d' }}&amp;status={{ status|urlencode }}&amp;dept={{ dept|urlencode }}&amp;employee={{ emp_id|urlencode }}">Excel export</a>
+  <a class="btn" href="{% url 'reports:export_csv' %}?from={{ day_from|date:'Y-m-d' }}&amp;to={{ day_to|date:'Y-m-d' }}&amp;status={{ status|urlencode }}&amp;dept={{ dept|urlencode }}&amp;employee={{ emp_id|urlencode }}">CSV</a>
 </form></div></div>
 
 <div class="grid g-4" style="margin-bottom:14px">

@@ -31,6 +31,73 @@ def _month_range(request):
     return year, month, first, last
 
 
+def _export_range(request):
+    """Date range for an export.
+
+    Priority: explicit from/to (used by the attendance sheet), then
+    year/month (used by the monthly sheet), then the current month.
+    """
+    raw_from = request.GET.get("from")
+    raw_to = request.GET.get("to")
+    first = last = None
+    for raw, name in ((raw_from, "first"), (raw_to, "last")):
+        if raw:
+            try:
+                parsed = datetime.strptime(raw, "%Y-%m-%d").date()
+            except (TypeError, ValueError):
+                parsed = None
+            if parsed:
+                if name == "first":
+                    first = parsed
+                else:
+                    last = parsed
+
+    if first or last:
+        today = app_today()
+        first = first or date_cls(today.year, today.month, 1)
+        last = last or today
+        if last < first:
+            first, last = last, first
+        return first, last
+
+    _year, _month, first, last = _month_range(request)
+    return first, last
+
+
+def _export_queryset(request):
+    """The rows an export should contain: same range and same filters as the UI.
+
+    Returns (queryset, filename_slug, sheet_title).
+    """
+    first, last = _export_range(request)
+    status = request.GET.get("status", "")
+    dept = request.GET.get("dept", "")
+    emp_id = request.GET.get("employee", "")
+
+    qs = (DailyAttendance.objects.filter(date__range=(first, last))
+          .select_related("employee", "employee__department")
+          .order_by("date", "employee__employee_id"))
+
+    # Mirrors apps.attendance.views.attendance_sheet so the file matches the screen.
+    if status == "problem":
+        qs = qs.filter(Q(is_late=True) | Q(is_early_out=True)
+                       | Q(status__in=[S.ABSENT, S.MISSING_OUT]))
+    elif status:
+        qs = qs.filter(status=status)
+    if dept:
+        qs = qs.filter(employee__department_id=dept)
+    if emp_id:
+        qs = qs.filter(employee_id=emp_id)
+
+    if first.year == last.year and first.month == last.month:
+        slug = f"{first:%Y-%m}"
+        title = f"{first:%b %Y}"
+    else:
+        slug = f"{first:%Y-%m-%d}_to_{last:%Y-%m-%d}"
+        title = f"{first:%d %b %Y} - {last:%d %b %Y}"[:31]
+    return qs, slug, title
+
+
 @manager_required
 def report_home(request):
     today = app_today()
@@ -152,9 +219,7 @@ def department_report(request):
 
 
 # ------------------------------------------------------------------ exports
-def _export_rows(first, last):
-    qs = (DailyAttendance.objects.filter(date__range=(first, last))
-          .select_related("employee", "employee__department").order_by("date", "employee__employee_id"))
+def _export_rows(qs):
     yield ["Date", "Employee ID", "Name", "Department", "Mode", "In", "Required out",
            "Out", "Worked", "Late (min)", "Early out (min)", "Overtime (min)", "Status", "Remarks"]
     for r in qs:
@@ -172,18 +237,18 @@ def _export_rows(first, last):
 
 @manager_required
 def export_csv(request):
-    year, month, first, last = _month_range(request)
+    qs, slug, _title = _export_queryset(request)
     response = HttpResponse(content_type="text/csv")
-    response["Content-Disposition"] = f'attachment; filename="attendance-{year}-{month:02d}.csv"'
+    response["Content-Disposition"] = f'attachment; filename="attendance-{slug}.csv"'
     writer = csv.writer(response)
-    for row in _export_rows(first, last):
+    for row in _export_rows(qs):
         writer.writerow(row)
     return response
 
 
 @manager_required
 def export_excel(request):
-    year, month, first, last = _month_range(request)
+    qs, slug, title = _export_queryset(request)
     try:
         from openpyxl import Workbook
         from openpyxl.styles import Alignment, Font, PatternFill
@@ -192,9 +257,9 @@ def export_excel(request):
 
     wb = Workbook()
     ws = wb.active
-    ws.title = f"{first:%b %Y}"
+    ws.title = title
     header_fill = PatternFill("solid", fgColor="14343B")
-    for i, row in enumerate(_export_rows(first, last)):
+    for i, row in enumerate(_export_rows(qs)):
         ws.append(row)
         if i == 0:
             for cell in ws[1]:
@@ -213,7 +278,7 @@ def export_excel(request):
         buffer.read(),
         content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    response["Content-Disposition"] = f'attachment; filename="attendance-{year}-{month:02d}.xlsx"'
+    response["Content-Disposition"] = f'attachment; filename="attendance-{slug}.xlsx"'
     return response
 
 
